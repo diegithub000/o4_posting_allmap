@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>城東区 作業進捗地図</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body { margin:0; font-family: sans-serif; }
+    #map { height: 100vh; }
+    .menu { position: absolute; top: 10px; left: 10px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000; }
+    select, button { margin: 5px; padding: 8px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="menu">
+    <h3>城東区 作業範囲</h3>
+    <select id="tanto" onchange="filterByTanto()">
+      <option value="">全員</option>
+    </select>
+    <button onclick="showAll()">作業範囲全体表示</button>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    const sheetId = "15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM";
+    const gasUrl = "https://script.google.com/macros/s/AKfycby.../exec"; // ← 後であなたのGAS URLに置き換え
+
+    let map, geojsonLayer, currentTanto = "";
+    let tantoList = [];
+
+    // 担当者一覧をシートから取得（初回のみ）
+    async function loadTantoList() {
+      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=シート1`;
+      const res = await fetch(url);
+      const csv = await res.text();
+      const rows = csv.split("\n").map(r => r.split(","));
+      tantoList = [...new Set(rows.slice(1).map(r => r[9].trim()).filter(Boolean))]; // J列（0始まりで9番目）
+      const select = document.getElementById("tanto");
+      tantoList.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+    }
+
+    // 地図初期化
+    async function initMap() {
+      map = L.map('map').setView([34.692, 135.55], 14); // 城東区中心
+
+      // 地理院タイル（丁目まで高精細）
+      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '国土地理院'
+      }).addTo(map);
+
+      // 建物輪郭（OpenStreetMap）
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, opacity: 0.3, attribution: '© OpenStreetMap'
+      }).addTo(map);
+
+      // GeoJSON読み込み（城東区のみフィルタ）
+      const geoRes = await fetch('4ku_town.geojson');
+      const geoData = await geoRes.json();
+      const jotoFeatures = geoData.features.filter(f => f.properties.CITY === "118");
+
+      geojsonLayer = L.geoJSON(jotoFeatures, {
+        style: feature => ({
+          fillColor: "#ff0000",
+          fillOpacity: 0.4,
+          color: "#000",
+          weight: 1
+        }),
+        onEachFeature: (feature, layer) => {
+          layer.on('click', async e => {
+            const key = feature.properties.KEY_CODE;
+            if (!currentTanto) {
+              alert("まず担当者を選んでください");
+              return;
+            }
+            // 色変更
+            layer.setStyle({ fillColor: "#0066ff", fillOpacity: 0.6 });
+            // シート書き戻し
+            await fetch(gasUrl, {
+              method: "POST",
+              body: JSON.stringify({ keyCode: key, tanto: currentTanto, status: "完了" })
+            });
+            document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME} を ${currentTanto} が完了にしました`;
+          });
+        }
+      }).addTo(map);
+    }
+
+    function filterByTanto() {
+      currentTanto = document.getElementById("tanto").value;
+      // 必要ならさらに色フィルタ（今は全表示）
+    }
+
+    function showAll() {
+      currentTanto = "";
+      document.getElementById("tanto").value = "";
+      // 必要ならレイヤー再描画（今はシンプルに全表示）
+    }
+
+    // 起動
+    window.onload = () => {
+      loadTantoList();
+      initMap();
+    };
+  </script>
+</body>
+</html>
