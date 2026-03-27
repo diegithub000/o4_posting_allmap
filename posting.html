@@ -18,7 +18,7 @@
   <div id="debug">読み込み中...</div>
 
   <script>
-    let map, layerGroup, allFeatures = [], currentTanto = "";
+    let map, layerGroup, baseFeatures = [], customFeatures = [], currentTanto = "";
     const gasUrl = "https://script.google.com/macros/s/AKfycbxiN6m6fO4LvUBSjExCXB0lPm0fJ8jaxHkNyuH0r6pfLzDWatdRORxInQcyAyHfands2w/exec";
 
     async function init() {
@@ -26,20 +26,21 @@
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      const base = await (await fetch('4ku_town.geojson')).json();
-      let custom = {features:[]};
-      try { custom = await (await fetch('custom.geojson')).json(); } catch(e) {}
+      const baseJson = await (await fetch('4ku_town.geojson')).json();
+      baseFeatures = baseJson.features.filter(f => f.properties.CITY === "118");
 
-      allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
+      let customJson = {features:[]};
+      try { customJson = await (await fetch('custom.geojson')).json(); } catch(e) {}
+      customFeatures = customJson.features;
+
+      const allFeatures = [...baseFeatures, ...customFeatures];
 
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
-      
       const dataMap = {};
-      parsed.slice(1).forEach((r, i) => {
+      parsed.slice(1).forEach(r => {
         const code = r[6]?.trim();
-        const tanto = r[9]?.trim() || "";
-        if (code) dataMap[code] = tanto;
+        if (code) dataMap[code] = r[9]?.trim() || "";
       });
 
       allFeatures.forEach(f => {
@@ -48,12 +49,11 @@
       });
 
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
-      
-      // デバッグ表示
+
       document.getElementById("debug").innerHTML = `
         CSV行数: ${parsed.length}<br>
         担当者数: ${tantoSet.size}名<br>
-        カスタムポリゴン: ${custom.features.length}件<br>
+        カスタムポリゴン: ${customFeatures.length}件<br>
         総ポリゴン: ${allFeatures.length}件
       `;
 
@@ -95,9 +95,9 @@
 
       let filtered = [];
       if (currentTanto) {
-        filtered = allFeatures.filter(f => f.properties.tanto === currentTanto);
+        filtered = customFeatures.filter(f => f.properties.tanto === currentTanto);  // カスタムだけ
       } else if (showBase) {
-        filtered = allFeatures.filter(f => !f.properties.KEY_CODE || !f.properties.KEY_CODE.startsWith("NEW_"));
+        filtered = baseFeatures;  // 標準だけ
       }
 
       renderMap(filtered);
