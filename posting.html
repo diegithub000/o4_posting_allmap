@@ -12,45 +12,41 @@
   <div id="map"></div>
   <div class="menu">
     <select id="tanto" onchange="filter()"><option value="">担当者を選択</option></select>
+    <label><input type="checkbox" id="showBase" checked onchange="filter()"> 標準地図ポリゴンも表示</label>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
   </div>
-  <div id="debug" style="position:absolute;bottom:10px;left:10px;background:white;padding:10px;max-width:400px;font-size:13px;border:1px solid #ccc;z-index:1000"></div>
 
   <script>
-    let map, layerGroup, allFeatures = [], currentTanto = "";
-    const debug = document.getElementById("debug");
+    let map, layerGroup, allFeatures = [], baseFeatures = [], currentTanto = "";
     const gasUrl = "https://script.google.com/macros/s/あなたの最新GAS_URL/exec"; // ←ここに貼り替え
-    function log(txt) { debug.innerHTML += txt + "<br>"; }
 
     async function init() {
-      debug.innerHTML = "🔄 読み込み開始...<br>";
       map = L.map('map').setView([34.69, 135.54], 14);
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      const [baseRes, customRes] = await Promise.all([fetch('4ku_town.geojson'), fetch('custom.geojson').catch(()=>null)]);
-      const base = await baseRes.json();
+      const base = await (await fetch('4ku_town.geojson')).json();
+      baseFeatures = base.features.filter(f=>f.properties.CITY==="118");
+
       let custom = {features:[]};
-      if (customRes) custom = await customRes.json();
+      try { custom = await (await fetch('custom.geojson')).json(); } catch(e) {}
+      allFeatures = [...baseFeatures, ...custom.features];
 
-      allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
-      log("📊 合計ポリゴン: " + allFeatures.length + "件");
-
+      // スプシから担当者取得（G列・J列）
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
       parsed.slice(1).forEach(r => {
-        const code = r[6]?.trim(); // G列 = 住所コード（JSONのKEY_CODEと一致）
-        if (code) dataMap[code] = r[9]?.trim() || ""; // J列 = 担当者名
+        const code = r[6]?.trim();
+        if (code) dataMap[code] = r[9]?.trim() || "";
       });
 
       allFeatures.forEach(f => {
         f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
+        f.properties.status = f.properties.status || "未完了";
       });
 
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
-      log("👥 担当者: " + tantoSet.size + "名");
-
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
         const opt = document.createElement("option");
@@ -59,30 +55,40 @@
       });
 
       filter();
-      log("✅ 描画完了");
     }
 
     function renderMap(features) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.layerGroup().addTo(map);
+
       features.forEach(f => {
         const color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
         L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1}
-        }).addTo(layerGroup).on('click', async () => {
-          const newStatus = f.properties.status === "完了" ? "未完了" : "完了";
-          f.properties.status = newStatus;
-          this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
-
-          await fetch(gasUrl, {method:"POST", body:JSON.stringify({keyCode:f.properties.KEY_CODE, tanto:f.properties.tanto, status:newStatus})});
-          document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
-        });
+          style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1},
+          onEachFeature: (feature, layer) => {
+            layer.on('click', async () => {
+              const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
+              feature.properties.status = newStatus;
+              layer.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
+              await fetch(gasUrl, {method:"POST", body:JSON.stringify({keyCode:feature.properties.KEY_CODE, tanto:feature.properties.tanto, status:newStatus})});
+              document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
+            });
+          }
+        }).addTo(layerGroup);
       });
     }
 
     function filter() {
       currentTanto = document.getElementById("tanto").value;
-      const filtered = currentTanto ? allFeatures.filter(f => f.properties.tanto === currentTanto) : [];
+      const showBase = document.getElementById("showBase").checked;
+
+      let filtered = allFeatures;
+      if (currentTanto) {
+        filtered = allFeatures.filter(f => f.properties.tanto === currentTanto);
+      } else if (!showBase) {
+        filtered = filtered.filter(f => f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_")); // カスタムのみ
+      }
+
       renderMap(filtered);
     }
 
