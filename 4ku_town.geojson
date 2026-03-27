@@ -1,1 +1,1 @@
-{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[135.543013,34.68642],[135.543032,34.686321],[135.544188,34.686144],[135.544177,34.686239],[135.543013,34.68642]]]}}]}
+{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"CITY":"118","KEY_CODE":"NEW_1774613253370","tanto":"上村宜行","status":"未完了","S_NAME":"手動描画"},"geometry":{"type":"Polygon","coordinates":[[[135.542415,34.686641],[135.54231,34.686061],[135.542909,34.68601],[135.54293,34.686592],[135.542415,34.686641]]]}}]}
