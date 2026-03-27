@@ -2,87 +2,23 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>城東区 作業進捗地図</title>
+  <title>城東区 作業進捗管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-    body{margin:0;font-family:sans-serif}#map{height:100vh}
-    .menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}
+    body { margin:0; height:100vh; display:flex; align-items:center; justify-content:center; background:#f0f0f0; font-family:sans-serif; }
+    .container { text-align:center; background:white; padding:40px; border-radius:15px; box-shadow:0 4px 20px rgba(0,0,0,0.1); }
+    h1 { color:#333; margin-bottom:30px; }
+    .btn { display:block; width:320px; margin:15px auto; padding:18px; font-size:18px; border-radius:8px; text-decoration:none; color:white; }
+    .admin { background:#d32f2f; }
+    .user { background:#1976d2; }
+    .btn:hover { opacity:0.9; }
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div class="menu">
-    <h3>城東区 作業進捗</h3>
-    <select id="tanto" onchange="filterMap()"><option value="">全員</option></select>
-    <button onclick="showAll()">全体表示</button>
-    <div id="status" style="margin-top:10px;font-size:14px;color:#0066ff"></div>
+  <div class="container">
+    <h1>城東区 作業進捗管理</h1>
+    <a href="admin-draw.html" class="btn admin">🔧 管理者メンテナンス<br>（ポリゴン描画・担当者割り当て）</a>
+    <a href="map.html" class="btn user">📍 担当者作業画面<br>（地図でタップ作業）</a>
   </div>
-
-  <script>
-    let map, layerGroup, allFeatures = [], currentTanto = "";
-    const gasUrl = "https://script.google.com/macros/s/AKfycbyhFsI3XvrsES85Jpo2RY8-8jI-KwnCY7W3lHjDW5qkS6C08rFxI6cqwouv7_bJPFbpEg/exec"; // ←ここに最新のGAS URL
-
-    async function init() {
-      map = L.map('map').setView([34.692, 135.55], 15);
-      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
-
-      // GeoJSON読み込み
-      const res = await fetch('4ku_town.geojson');
-      const data = await res.json();
-      allFeatures = data.features.filter(f => f.properties.CITY === "118"); // 城東区のみ
-
-      console.log("読み込んだポリゴン数:", allFeatures.length); // デバッグ用
-
-      // 担当者リスト作成
-      const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
-      const select = document.getElementById("tanto");
-      tantoSet.forEach(name => {
-        const opt = document.createElement("option");
-        opt.value = name; opt.textContent = name;
-        select.appendChild(opt);
-      });
-
-      renderMap(allFeatures); // 最初は全部表示
-    }
-
-    function renderMap(features) {
-      if (layerGroup) map.removeLayer(layerGroup);
-      layerGroup = L.layerGroup().addTo(map);
-
-      features.forEach(f => {
-        const color = f.properties.status === "完了" ? "#0066ff" : "#ff0000";
-        L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: 0.4, color: "#333", weight: 1}
-        }).addTo(layerGroup).on('click', async function() {
-          const newStatus = f.properties.status === "完了" ? "未完了" : "完了";
-          f.properties.status = newStatus;
-          this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff0000"});
-
-          await fetch(gasUrl, {
-            method: "POST",
-            body: JSON.stringify({keyCode: f.properties.KEY_CODE, tanto: f.properties.tanto, status: newStatus})
-          });
-          document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME || "ポリゴン"} を ${newStatus} に変更`;
-        });
-      });
-    }
-
-    function filterMap() {
-      currentTanto = document.getElementById("tanto").value;
-      const filtered = currentTanto ? allFeatures.filter(f => f.properties.tanto === currentTanto) : allFeatures;
-      renderMap(filtered);
-    }
-
-    function showAll() {
-      currentTanto = "";
-      document.getElementById("tanto").value = "";
-      renderMap(allFeatures);
-    }
-
-    window.onload = init;
-  </script>
 </body>
 </html>
