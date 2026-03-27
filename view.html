@@ -19,24 +19,22 @@
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      // 元GeoJSON + カスタムJSON両方読み込み
       const [baseRes, customRes] = await Promise.all([
         fetch('4ku_town.geojson'), fetch('joto_custom.geojson').catch(()=>null)
       ]);
       const base = await baseRes.json();
       let custom = {features:[]};
       if (customRes) custom = await customRes.json();
-
       allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
 
-      // シート1からG,H,J取得
+      // シート1から D列(地区コード), H列(地域名), J列(担当者名)取得
       const sheetUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1";
       const csvRes = await fetch(sheetUrl);
       const csv = await csvRes.text();
       const rows = csv.split('\n').map(r=>r.split(','));
       const dataMap = {};
       rows.slice(1).forEach(r => {
-        const code = r[6]?.trim(); // G列
+        const code = r[3]?.trim(); // D列 = 地区コード（118から始まる）
         if (code) dataMap[code] = {name: r[7]?.trim(), tanto: r[9]?.trim()};
       });
 
@@ -46,7 +44,6 @@
         f.properties.S_NAME = dataMap[code]?.name || f.properties.S_NAME || "不明";
       });
 
-      // 担当者リスト
       const tantoSet = new Set(allFeatures.map(f=>f.properties.tanto).filter(Boolean));
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
@@ -63,7 +60,7 @@
       layerGroup = L.layerGroup().addTo(map);
       features.forEach(f => {
         const tanto = f.properties.tanto;
-        let color = tanto ? "#2e7d32" : "#666666"; // 担当者あり=薄いグリーン、なし=グレー
+        const color = tanto ? "#2e7d32" : "#666666";
         L.geoJSON(f, {style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1}}).addTo(layerGroup);
       });
     }

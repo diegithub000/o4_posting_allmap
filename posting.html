@@ -15,24 +15,36 @@
   </div>
   <script>
     let map, layerGroup, allFeatures = [], currentTanto = "";
-    const gasUrl = "https://script.google.com/macros/s/あなたの最新GAS_URL/exec"; // ←ここに貼り替え
+    const gasUrl = "https://script.google.com/macros/s/AKfycbyagvM93f9T9eXRG7XCvMvvE07LlOdwZRjjR93HDK0Z/dev"; // ←GAS
 
     async function init() {
       map = L.map('map').setView([34.69, 135.54], 14);
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      // 元GeoJSON + カスタムJSON
       const [baseRes, customRes] = await Promise.all([
         fetch('4ku_town.geojson'), fetch('joto_custom.geojson').catch(()=>null)
       ]);
       const base = await baseRes.json();
       let custom = {features:[]};
       if (customRes) custom = await customRes.json();
-
       allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
 
-      // 担当者リスト
+      const sheetUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1";
+      const csvRes = await fetch(sheetUrl);
+      const csv = await csvRes.text();
+      const rows = csv.split('\n').map(r=>r.split(','));
+      const dataMap = {};
+      rows.slice(1).forEach(r => {
+        const code = r[3]?.trim(); // D列 = 地区コード
+        if (code) dataMap[code] = {tanto: r[9]?.trim()};
+      });
+
+      allFeatures.forEach(f => {
+        const code = f.properties.KEY_CODE;
+        f.properties.tanto = dataMap[code]?.tanto || "";
+      });
+
       const tantoSet = new Set(allFeatures.map(f=>f.properties.tanto).filter(Boolean));
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
