@@ -5,18 +5,14 @@
   <title>城東区 エリア確認</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    body{margin:0}#map{height:100vh}
-    .menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}
-    #debug{position:absolute;bottom:10px;left:10px;background:white;padding:10px;max-width:400px;max-height:300px;overflow:auto;z-index:1000;font-size:13px;border:1px solid #ccc}
-  </style>
+  <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}</style>
 </head>
 <body>
   <div id="map"></div>
   <div class="menu">
     <select id="tanto" onchange="filter()"><option value="">全体表示</option></select>
   </div>
-  <div id="debug"></div>
+  <div id="debug" style="position:absolute;bottom:10px;left:10px;background:white;padding:10px;max-width:400px;font-size:13px;border:1px solid #ccc;z-index:1000"></div>
 
   <script>
     let map, layerGroup, allFeatures = [];
@@ -24,7 +20,6 @@
 
     function log(txt) {
       debug.innerHTML += txt + "<br>";
-      debug.scrollTop = debug.scrollHeight;
     }
 
     async function init() {
@@ -33,20 +28,26 @@
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      const [baseRes, customRes] = await Promise.all([fetch('4ku_town.geojson'), fetch('joto_custom.geojson').catch(()=>null)]);
+      // 元データ
+      const baseRes = await fetch('4ku_town.geojson');
       const base = await baseRes.json();
       let custom = {features:[]};
-      if (customRes) custom = await customRes.json();
-      allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
 
-      log("📊 元GeoJSON: " + base.features.length + "件");
-      log("📊 カスタムGeoJSON: " + custom.features.length + "件");
+      // カスタムJSONはなくてもOK
+      try {
+        const customRes = await fetch('joto_custom.geojson');
+        custom = await customRes.json();
+        log("📊 カスタムJSON読み込み成功");
+      } catch(e) {
+        log("⚠️ joto_custom.geojson が見つかりません（初回は空でOK）");
+      }
+
+      allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
       log("📊 合計城東区ポリゴン: " + allFeatures.length + "件");
 
+      // スプシ
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const rows = csvText.split('\n').map(r => r.split(','));
-      log("📊 スプシ行数: " + rows.length + "行");
-
       const dataMap = {};
       rows.slice(1).forEach(r => {
         const code = r[3]?.trim();
@@ -58,8 +59,7 @@
       });
 
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
-      log("👥 担当者一覧取得数: " + tantoSet.size + "名");
-      log("👥 担当者: " + Array.from(tantoSet).join(" / "));
+      log("👥 担当者一覧: " + tantoSet.size + "名");
 
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
