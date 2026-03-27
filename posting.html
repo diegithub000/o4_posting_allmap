@@ -95,9 +95,9 @@
 
       let filtered = [];
       if (currentTanto) {
-        filtered = customFeatures.filter(f => f.properties.tanto === currentTanto);  // カスタムだけ
+        filtered = customFeatures.filter(f => f.properties.tanto === currentTanto); // カスタムだけ
       } else if (showBase) {
-        filtered = baseFeatures;  // 標準だけ
+        filtered = baseFeatures; // 標準だけ
       }
 
       renderMap(filtered);
