@@ -34,20 +34,17 @@
       allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
       log("📊 合計ポリゴン: " + allFeatures.length + "件");
 
-      // PapaParseでD列とJ列を厳密取得
+      // 以前成功してた方式：G列（index 6）をそのまま使用
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
       parsed.slice(1).forEach(r => {
-        const code = r[3]?.trim(); // D列
+        const code = r[6]?.trim(); // G列 = 住所コード（JSONのKEY_CODEと一致）
         if (code) dataMap[code] = r[9]?.trim() || ""; // J列 = 担当者名
       });
 
-      // KEY_CODEから先頭の"27"を除去してD列と一致させる
       allFeatures.forEach(f => {
-        let key = f.properties.KEY_CODE;
-        if (key.startsWith("27")) key = key.substring(2);
-        f.properties.tanto = dataMap[key] || "";
+        f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
       });
 
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
