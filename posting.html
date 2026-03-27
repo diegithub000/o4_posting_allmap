@@ -34,10 +34,8 @@
 
       let customJson = {features:[]};
       try {
-        // ★ キャッシュ完全無効化 + タイムスタンプで強制最新版取得
-        const ts = Date.now();
-        const customRes = await fetch('custom.geojson?t=' + ts, { cache: 'no-store' });
-        logDebug('custom.geojson フェッチ: ' + customRes.status + ' (ts=' + ts + ')');
+        const customRes = await fetch('custom.geojson');
+        logDebug('custom.geojson フェッチ: ' + customRes.status);
         customJson = await customRes.json();
       } catch(e) { logDebug('custom.geojson フェッチ失敗: ' + e.message); }
       customFeatures = customJson.features;
