@@ -5,6 +5,7 @@
   <title>城東区 エリア確認</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}</style>
 </head>
 <body>
@@ -29,13 +30,13 @@
 
       alert("読み込んだポリゴン数: 元データ " + base.features.length + "件 + カスタム " + custom.features.length + "件 = 合計 " + allFeatures.length + "件");
 
-      // スプシから D列(地区コード) と J列(担当者名) を正しく取得
+      // PapaParseで安全にCSV取得 → J列(10番目)から担当者名
       const sheetUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1";
       const csvRes = await fetch(sheetUrl);
-      const csv = await csvRes.text();
-      const rows = csv.split('\n').map(r => r.split(','));
+      const csvText = await csvRes.text();
+      const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
-      rows.slice(1).forEach(r => {
+      parsed.slice(1).forEach(r => {
         const code = r[3]?.trim(); // D列 = 地区コード
         if (code) dataMap[code] = {tanto: r[9]?.trim() || ""}; // J列 = 担当者名
       });
@@ -46,7 +47,7 @@
       });
 
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
-      alert("スプシから取得した担当者数: " + tantoSet.size + "名");
+      alert("スプシから取得した担当者数: " + tantoSet.size + "名\n\n" + Array.from(tantoSet).join("\n"));
 
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
