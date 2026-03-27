@@ -12,12 +12,12 @@
   <div id="map"></div>
   <div class="menu">
     <select id="tanto" onchange="filter()"><option value="">担当者を選択</option></select>
-    <label><input type="checkbox" id="showBase" checked onchange="filter()"> 標準地図ポリゴンも表示</label>
+    <label><input type="checkbox" id="showBase" onchange="filter()"> 標準地図ポリゴンも表示</label>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
   </div>
 
   <script>
-    let map, layerGroup, allFeatures = [], baseFeatures = [], currentTanto = "";
+    let map, layerGroup, allFeatures = [], currentTanto = "";
     const gasUrl = "https://script.google.com/macros/s/あなたの最新GAS_URL/exec"; // ←ここに貼り替え
 
     async function init() {
@@ -26,19 +26,18 @@
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
       const base = await (await fetch('4ku_town.geojson')).json();
-      baseFeatures = base.features.filter(f=>f.properties.CITY==="118");
-
       let custom = {features:[]};
       try { custom = await (await fetch('custom.geojson')).json(); } catch(e) {}
-      allFeatures = [...baseFeatures, ...custom.features];
 
-      // スプシから担当者取得（G列・J列）
+      allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
+
+      // スプシからG列・J列取得
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
       parsed.slice(1).forEach(r => {
-        const code = r[6]?.trim();
-        if (code) dataMap[code] = r[9]?.trim() || "";
+        const code = r[6]?.trim(); // G列
+        if (code) dataMap[code] = r[9]?.trim() || ""; // J列
       });
 
       allFeatures.forEach(f => {
@@ -70,7 +69,11 @@
               const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
               feature.properties.status = newStatus;
               layer.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
-              await fetch(gasUrl, {method:"POST", body:JSON.stringify({keyCode:feature.properties.KEY_CODE, tanto:feature.properties.tanto, status:newStatus})});
+
+              await fetch(gasUrl, {
+                method: "POST",
+                body: JSON.stringify({keyCode: feature.properties.KEY_CODE, tanto: feature.properties.tanto, status: newStatus})
+              });
               document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
             });
           }
