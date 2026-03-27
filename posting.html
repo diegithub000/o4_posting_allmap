@@ -40,7 +40,7 @@
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
       parsed.slice(1).forEach(r => {
-        const code = r[6]?.trim(); // G列 = 住所コード
+        const code = r[6]?.trim(); // G列 = 住所コード（JSONのKEY_CODEと一致）
         if (code) dataMap[code] = r[9]?.trim() || ""; // J列 = 担当者名
       });
 
