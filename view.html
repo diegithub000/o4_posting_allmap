@@ -35,7 +35,7 @@
 
       // カスタムJSONはなくてもOK
       try {
-        const customRes = await fetch('joto_custom.geojson');
+        const customRes = await fetch('custom.geojson');
         custom = await customRes.json();
         log("📊 カスタムJSON読み込み成功");
       } catch(e) {
