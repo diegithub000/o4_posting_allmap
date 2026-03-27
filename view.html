@@ -25,16 +25,18 @@
       const base = await baseRes.json();
       let custom = {features:[]};
       if (customRes) custom = await customRes.json();
-      allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
 
-      // シート1から D列(地区コード), H列(地域名), J列(担当者名)取得
+      allFeatures = [...base.features.filter(f => f.properties.CITY === "118"), ...custom.features];
+
+      alert("読み込んだポリゴン数: 元データ " + base.features.length + "件 + カスタム " + custom.features.length + "件 = 合計 " + allFeatures.length + "件");
+
       const sheetUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1";
       const csvRes = await fetch(sheetUrl);
       const csv = await csvRes.text();
-      const rows = csv.split('\n').map(r=>r.split(','));
+      const rows = csv.split('\n').map(r => r.split(','));
       const dataMap = {};
       rows.slice(1).forEach(r => {
-        const code = r[3]?.trim(); // D列 = 地区コード（118から始まる）
+        const code = r[3]?.trim(); // D列 = 地区コード
         if (code) dataMap[code] = {name: r[7]?.trim(), tanto: r[9]?.trim()};
       });
 
@@ -44,7 +46,7 @@
         f.properties.S_NAME = dataMap[code]?.name || f.properties.S_NAME || "不明";
       });
 
-      const tantoSet = new Set(allFeatures.map(f=>f.properties.tanto).filter(Boolean));
+      const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
         const opt = document.createElement("option");
