@@ -26,7 +26,6 @@
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      // フェッチ詳細ログ
       const baseRes = await fetch('4ku_town.geojson');
       logDebug('4ku_town.geojson フェッチ: ' + baseRes.status);
       const baseJson = await baseRes.json();
@@ -57,7 +56,6 @@
       });
       logDebug('dataMap作成完了');
 
-      // カスタムtantoを優先
       allFeatures.forEach(f => {
         if (f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_")) {
           // カスタムはそのまま
@@ -89,7 +87,7 @@
     function renderMap(features) {
       logDebug('renderMap呼び出し - 対象件数: ' + features.length);
       if (layerGroup) map.removeLayer(layerGroup);
-      layerGroup = L.layerGroup().addTo(map);
+      layerGroup = L.featureGroup().addTo(map);
 
       features.forEach(f => {
         logDebug('描画中: ' + (f.properties.KEY_CODE || '不明') + ' tanto=' + f.properties.tanto);
@@ -107,10 +105,6 @@
           }
         }).addTo(layerGroup);
       });
-
-      if (features.length > 0 && currentTanto) {
-        map.fitBounds(layerGroup.getBounds(), {padding: [30, 30]});
-      }
     }
 
     function filter() {
