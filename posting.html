@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}</style>
+  <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}#debug{position:absolute;bottom:10px;left:10px;background:#000;color:#0f0;padding:8px;font-size:12px;max-width:300px;z-index:1000;opacity:0.9}</style>
 </head>
 <body>
   <div id="map"></div>
@@ -15,6 +15,7 @@
     <label><input type="checkbox" id="showBase" onchange="filter()"> 標準地図ポリゴンも表示</label>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
   </div>
+  <div id="debug">読み込み中...</div>
 
   <script>
     let map, layerGroup, allFeatures = [], currentTanto = "";
@@ -31,12 +32,14 @@
 
       allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
 
-      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/?tqx=out:csv&sheet=シート1")).text();
+      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
+      
       const dataMap = {};
-      parsed.slice(1).forEach(r => {
+      parsed.slice(1).forEach((r, i) => {
         const code = r[6]?.trim();
-        if (code) dataMap[code] = r[9]?.trim() || "";
+        const tanto = r[9]?.trim() || "";
+        if (code) dataMap[code] = tanto;
       });
 
       allFeatures.forEach(f => {
@@ -45,6 +48,15 @@
       });
 
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
+      
+      // デバッグ表示
+      document.getElementById("debug").innerHTML = `
+        CSV行数: ${parsed.length}<br>
+        担当者数: ${tantoSet.size}名<br>
+        カスタムポリゴン: ${custom.features.length}件<br>
+        総ポリゴン: ${allFeatures.length}件
+      `;
+
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
         const opt = document.createElement("option");
@@ -52,7 +64,7 @@
         select.appendChild(opt);
       });
 
-      filter(); // 初期は何も表示しない
+      filter();
     }
 
     function renderMap(features) {
