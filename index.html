@@ -17,44 +17,26 @@
     <h3>城東区 作業進捗</h3>
     <select id="tanto" onchange="filterMap()"><option value="">全員</option></select>
     <button onclick="showAll()">全体表示</button>
-    <div id="status" style="margin-top:10px;font-size:14px"></div>
+    <div id="status" style="margin-top:10px;font-size:14px;color:#0066ff"></div>
   </div>
 
   <script>
-    const sheetId = "15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM";
-    const gasUrl = "https://script.google.com/macros/s/AKfycbyhFsI3XvrsES85Jpo2RY8-8jI-KwnCY7W3lHjDW5qkS6C08rFxI6cqwouv7_bJPFbpEg/exec"; // GAS URL
     let map, layerGroup, allFeatures = [], currentTanto = "";
+    const gasUrl = "https://script.google.com/macros/s/AKfycbyhFsI3XvrsES85Jpo2RY8-8jI-KwnCY7W3lHjDW5qkS6C08rFxI6cqwouv7_bJPFbpEg/exec"; // ←ここに最新のGAS URL
 
-    async function loadData() {
-      // スプシ全データ取得（G列KEY_CODE, J列担当者, 新L列状態）
-      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=シート1`;
-      const res = await fetch(url);
-      const csv = await res.text();
-      const rows = csv.split('\n').map(r => r.split(','));
-      const dataMap = {};
-      rows.slice(1).forEach(row => {
-        const key = row[6]?.trim(); // G列
-        if (key) dataMap[key] = {tanto: row[9]?.trim(), status: row[11]?.trim() || "未完了"}; // J列=9, L列=11（適宜調整）
-      });
+    async function init() {
+      map = L.map('map').setView([34.692, 135.55], 15);
+      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      // GeoJSON読み込み（城東区のみ）
-      const geoRes = await fetch('4ku_town.geojson');
-      const geoData = await geoRes.json();
-      allFeatures = geoData.features.filter(f => f.properties.CITY === "118"); // 城東区のみ
+      // GeoJSON読み込み
+      const res = await fetch('4ku_town.geojson');
+      const data = await res.json();
+      allFeatures = data.features.filter(f => f.properties.CITY === "118"); // 城東区のみ
 
-      // 担当者と状態をGeoJSONにマッチ
-      allFeatures.forEach(f => {
-        const key = f.properties.KEY_CODE;
-        if (dataMap[key]) {
-          f.properties.tanto = dataMap[key].tanto;
-          f.properties.status = dataMap[key].status;
-        } else {
-          f.properties.tanto = "";
-          f.properties.status = "未完了";
-        }
-      });
+      console.log("読み込んだポリゴン数:", allFeatures.length); // デバッグ用
 
-      // 担当者リスト生成
+      // 担当者リスト作成
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
@@ -62,34 +44,28 @@
         opt.value = name; opt.textContent = name;
         select.appendChild(opt);
       });
+
+      renderMap(allFeatures); // 最初は全部表示
     }
 
-    function renderMap(filteredFeatures) {
+    function renderMap(features) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.layerGroup().addTo(map);
 
-      filteredFeatures.forEach(f => {
+      features.forEach(f => {
         const color = f.properties.status === "完了" ? "#0066ff" : "#ff0000";
-        const poly = L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: 0.4, color: "#000", weight: 1}
-        }).addTo(layerGroup);
-
-        poly.on('click', async () => {
+        L.geoJSON(f, {
+          style: {fillColor: color, fillOpacity: 0.4, color: "#333", weight: 1}
+        }).addTo(layerGroup).on('click', async function() {
           const newStatus = f.properties.status === "完了" ? "未完了" : "完了";
           f.properties.status = newStatus;
-          const newColor = newStatus === "完了" ? "#0066ff" : "#ff0000";
-          poly.setStyle({fillColor: newColor});
+          this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff0000"});
 
-          // スプシ送信
           await fetch(gasUrl, {
             method: "POST",
-            body: JSON.stringify({
-              keyCode: f.properties.KEY_CODE,
-              tanto: f.properties.tanto || currentTanto,
-              status: newStatus
-            })
+            body: JSON.stringify({keyCode: f.properties.KEY_CODE, tanto: f.properties.tanto, status: newStatus})
           });
-          document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME} を ${newStatus} に変更`;
+          document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME || "ポリゴン"} を ${newStatus} に変更`;
         });
       });
     }
@@ -106,13 +82,6 @@
       renderMap(allFeatures);
     }
 
-    async function init() {
-      map = L.map('map').setView([34.692, 135.55], 15);
-      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
-      await loadData();
-      renderMap(allFeatures); // 最初は全員＝全ポリゴン赤表示
-    }
     window.onload = init;
   </script>
 </body>
