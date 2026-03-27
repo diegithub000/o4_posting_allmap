@@ -35,8 +35,8 @@
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
       parsed.slice(1).forEach(r => {
-        const code = r[6]?.trim(); // G列
-        if (code) dataMap[code] = r[9]?.trim() || ""; // J列
+        const code = r[6]?.trim();
+        if (code) dataMap[code] = r[9]?.trim() || "";
       });
 
       allFeatures.forEach(f => {
@@ -61,25 +61,26 @@
 
       features.forEach(f => {
         const color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
-        const geo = L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1}
+        L.geoJSON(f, {
+          style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1},
+          onEachFeature: (feature, layer) => {
+            layer.on('click', async function() {
+              const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
+              feature.properties.status = newStatus;
+              layer.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
+
+              await fetch(gasUrl, {
+                method: "POST",
+                body: JSON.stringify({
+                  keyCode: feature.properties.KEY_CODE,
+                  tanto: feature.properties.tanto,
+                  status: newStatus
+                })
+              });
+              document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
+            });
+          }
         }).addTo(layerGroup);
-
-        geo.on('click', async function() {
-          const newStatus = f.properties.status === "完了" ? "未完了" : "完了";
-          f.properties.status = newStatus;
-          this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
-
-          await fetch(gasUrl, {
-            method: "POST",
-            body: JSON.stringify({
-              keyCode: f.properties.KEY_CODE,
-              tanto: f.properties.tanto,
-              status: newStatus
-            })
-          });
-          document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
-        });
       });
     }
 
@@ -91,7 +92,7 @@
       if (currentTanto) {
         filtered = allFeatures.filter(f => f.properties.tanto === currentTanto);
       } else if (!showBase) {
-        filtered = filtered.filter(f => f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_"));
+        filtered = filtered.filter(f => f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_")); // カスタムのみ
       }
 
       renderMap(filtered);
