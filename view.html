@@ -19,9 +19,7 @@
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      const [baseRes, customRes] = await Promise.all([
-        fetch('4ku_town.geojson'), fetch('joto_custom.geojson').catch(()=>null)
-      ]);
+      const [baseRes, customRes] = await Promise.all([fetch('4ku_town.geojson'), fetch('joto_custom.geojson').catch(()=>null)]);
       const base = await baseRes.json();
       let custom = {features:[]};
       if (customRes) custom = await customRes.json();
