@@ -26,7 +26,12 @@
 
       const base = await (await fetch('4ku_town.geojson')).json();
       let custom = {features:[]};
-      try { custom = await (await fetch('custom.geojson')).json(); log("📊 custom.geojson OK"); } catch(e) { log("⚠️ custom.geojson なし（初回OK）"); }
+      try {
+        custom = await (await fetch('custom.geojson')).json();
+        log("📊 custom.geojson 読み込み成功");
+      } catch(e) {
+        log("⚠️ custom.geojson なし（初回OK）");
+      }
 
       allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
       log("📊 合計ポリゴン: " + allFeatures.length + "件");
@@ -40,6 +45,7 @@
       });
 
       allFeatures.forEach(f => f.properties.tanto = dataMap[f.properties.KEY_CODE] || "");
+
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
       log("👥 担当者: " + tantoSet.size + "名");
 
