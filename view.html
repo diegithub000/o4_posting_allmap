@@ -25,11 +25,11 @@
       const base = await baseRes.json();
       let custom = {features:[]};
       if (customRes) custom = await customRes.json();
-
-      allFeatures = [...base.features.filter(f => f.properties.CITY === "118"), ...custom.features];
+      allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
 
       alert("読み込んだポリゴン数: 元データ " + base.features.length + "件 + カスタム " + custom.features.length + "件 = 合計 " + allFeatures.length + "件");
 
+      // スプシから D列(地区コード) と J列(担当者名) を正しく取得
       const sheetUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1";
       const csvRes = await fetch(sheetUrl);
       const csv = await csvRes.text();
@@ -37,16 +37,17 @@
       const dataMap = {};
       rows.slice(1).forEach(r => {
         const code = r[3]?.trim(); // D列 = 地区コード
-        if (code) dataMap[code] = {name: r[7]?.trim(), tanto: r[9]?.trim()};
+        if (code) dataMap[code] = {tanto: r[9]?.trim() || ""}; // J列 = 担当者名
       });
 
       allFeatures.forEach(f => {
         const code = f.properties.KEY_CODE;
         f.properties.tanto = dataMap[code]?.tanto || "";
-        f.properties.S_NAME = dataMap[code]?.name || f.properties.S_NAME || "不明";
       });
 
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
+      alert("スプシから取得した担当者数: " + tantoSet.size + "名");
+
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
         const opt = document.createElement("option");
@@ -61,8 +62,7 @@
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.layerGroup().addTo(map);
       features.forEach(f => {
-        const tanto = f.properties.tanto;
-        const color = tanto ? "#2e7d32" : "#666666";
+        const color = f.properties.tanto ? "#2e7d32" : "#666666";
         L.geoJSON(f, {style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1}}).addTo(layerGroup);
       });
     }
