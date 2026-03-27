@@ -81,13 +81,11 @@
       currentTanto = document.getElementById("tanto").value;
       const showBase = document.getElementById("showBase").checked;
 
-      let filtered = allFeatures;
+      let filtered = [];
       if (currentTanto) {
         filtered = allFeatures.filter(f => f.properties.tanto === currentTanto);
-      } else if (!showBase) {
-        filtered = filtered.filter(f => f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_")); // カスタムのみ
-      } else {
-        filtered = []; // 担当者未選択 + 標準OFF → 何も表示しない
+      } else if (showBase) {
+        filtered = allFeatures.filter(f => !f.properties.KEY_CODE || !f.properties.KEY_CODE.startsWith("NEW_"));
       }
 
       renderMap(filtered);
