@@ -5,7 +5,6 @@
   <title>城東区 エリア確認</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}</style>
 </head>
 <body>
@@ -20,19 +19,20 @@
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      const [baseRes, customRes] = await Promise.all([fetch('4ku_town.geojson'), fetch('joto_custom.geojson').catch(()=>null)]);
+      const [baseRes, customRes] = await Promise.all([
+        fetch('4ku_town.geojson'), fetch('joto_custom.geojson').catch(()=>null)
+      ]);
       const base = await baseRes.json();
       let custom = {features:[]};
       if (customRes) custom = await customRes.json();
       allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
 
-      // スプシから正確にD列とJ列を取得
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
-      const parsed = Papa.parse(csvText, {header: false, skipEmptyLines: true}).data;
+      const rows = csvText.split('\n').map(r => r.split(','));
       const dataMap = {};
-      parsed.slice(1).forEach(r => {
-        const code = r[3]?.trim(); // D列
-        if (code) dataMap[code] = r[9]?.trim() || ""; // J列 = 担当者名
+      rows.slice(1).forEach(r => {
+        const code = r[3]?.trim();
+        if (code) dataMap[code] = r[9]?.trim() || "";
       });
 
       allFeatures.forEach(f => {
@@ -40,8 +40,6 @@
       });
 
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
-      alert("担当者一覧取得数: " + tantoSet.size + "名");
-
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
         const opt = document.createElement("option");
