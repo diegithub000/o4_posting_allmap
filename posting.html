@@ -13,39 +13,39 @@
     <select id="tanto" onchange="filter()"><option value="">担当者を選択</option></select>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
   </div>
+  <div id="debug" style="position:absolute;bottom:10px;left:10px;background:white;padding:10px;max-width:400px;font-size:13px;border:1px solid #ccc;z-index:1000"></div>
   <script>
     let map, layerGroup, allFeatures = [], currentTanto = "";
-    const gasUrl = "https://script.google.com/macros/s/AKfycbyagvM93f9T9eXRG7XCvMvvE07LlOdwZRjjR93HDK0Z/dev"; // ←GAS
+    const debug = document.getElementById("debug");
+    const gasUrl = "https://script.google.com/macros/s/あなたの最新GAS_URL/exec"; // ←ここに貼り替え
+    function log(txt) { debug.innerHTML += txt + "<br>"; }
 
     async function init() {
+      debug.innerHTML = "🔄 読み込み開始...<br>";
       map = L.map('map').setView([34.69, 135.54], 14);
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      const [baseRes, customRes] = await Promise.all([
-        fetch('4ku_town.geojson'), fetch('joto_custom.geojson').catch(()=>null)
-      ]);
-      const base = await baseRes.json();
+      const base = await (await fetch('4ku_town.geojson')).json();
       let custom = {features:[]};
-      if (customRes) custom = await customRes.json();
-      allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
+      try { custom = await (await fetch('custom.geojson')).json(); log("📊 custom.geojson OK"); } catch(e) { log("⚠️ custom.geojson なし"); }
 
-      const sheetUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1";
-      const csvRes = await fetch(sheetUrl);
-      const csv = await csvRes.text();
-      const rows = csv.split('\n').map(r=>r.split(','));
+      allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
+      log("📊 合計ポリゴン: " + allFeatures.length + "件");
+
+      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
+      const rows = csvText.split('\n').map(r => r.split(','));
       const dataMap = {};
       rows.slice(1).forEach(r => {
-        const code = r[3]?.trim(); // D列 = 地区コード
-        if (code) dataMap[code] = {tanto: r[9]?.trim()};
+        const code = r[3]?.trim();
+        if (code) dataMap[code] = r[9]?.trim() || "";
       });
 
-      allFeatures.forEach(f => {
-        const code = f.properties.KEY_CODE;
-        f.properties.tanto = dataMap[code]?.tanto || "";
-      });
+      allFeatures.forEach(f => f.properties.tanto = dataMap[f.properties.KEY_CODE] || "");
 
-      const tantoSet = new Set(allFeatures.map(f=>f.properties.tanto).filter(Boolean));
+      const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
+      log("👥 担当者: " + tantoSet.size + "名");
+
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
         const opt = document.createElement("option");
@@ -54,6 +54,7 @@
       });
 
       filter();
+      log("✅ 描画完了");
     }
 
     function renderMap(features) {
@@ -67,7 +68,6 @@
           const newStatus = f.properties.status === "完了" ? "未完了" : "完了";
           f.properties.status = newStatus;
           this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
-
           await fetch(gasUrl, {method:"POST", body:JSON.stringify({keyCode:f.properties.KEY_CODE, tanto:f.properties.tanto, status:newStatus})});
           document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
         });

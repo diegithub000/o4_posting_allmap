@@ -13,14 +13,10 @@
     <select id="tanto" onchange="filter()"><option value="">全体表示</option></select>
   </div>
   <div id="debug" style="position:absolute;bottom:10px;left:10px;background:white;padding:10px;max-width:400px;font-size:13px;border:1px solid #ccc;z-index:1000"></div>
-
   <script>
     let map, layerGroup, allFeatures = [];
     const debug = document.getElementById("debug");
-
-    function log(txt) {
-      debug.innerHTML += txt + "<br>";
-    }
+    function log(txt) { debug.innerHTML += txt + "<br>"; }
 
     async function init() {
       debug.innerHTML = "🔄 読み込み開始...<br>";
@@ -28,24 +24,13 @@
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      // 元データ
-      const baseRes = await fetch('4ku_town.geojson');
-      const base = await baseRes.json();
+      const base = await (await fetch('4ku_town.geojson')).json();
       let custom = {features:[]};
-
-      // カスタムJSONはなくてもOK
-      try {
-        const customRes = await fetch('custom.geojson');
-        custom = await customRes.json();
-        log("📊 カスタムJSON読み込み成功");
-      } catch(e) {
-        log("⚠️ joto_custom.geojson が見つかりません（初回は空でOK）");
-      }
+      try { custom = await (await fetch('custom.geojson')).json(); log("📊 custom.geojson OK"); } catch(e) { log("⚠️ custom.geojson なし（初回OK）"); }
 
       allFeatures = [...base.features.filter(f=>f.properties.CITY==="118"), ...custom.features];
-      log("📊 合計城東区ポリゴン: " + allFeatures.length + "件");
+      log("📊 合計ポリゴン: " + allFeatures.length + "件");
 
-      // スプシ
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const rows = csvText.split('\n').map(r => r.split(','));
       const dataMap = {};
@@ -54,12 +39,9 @@
         if (code) dataMap[code] = r[9]?.trim() || "";
       });
 
-      allFeatures.forEach(f => {
-        f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
-      });
-
+      allFeatures.forEach(f => f.properties.tanto = dataMap[f.properties.KEY_CODE] || "");
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
-      log("👥 担当者一覧: " + tantoSet.size + "名");
+      log("👥 担当者: " + tantoSet.size + "名");
 
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
@@ -69,7 +51,7 @@
       });
 
       renderMap(allFeatures);
-      log("✅ 地図描画完了");
+      log("✅ 描画完了");
     }
 
     function renderMap(features) {
