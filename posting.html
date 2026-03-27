@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}#debug{position:absolute;bottom:10px;left:10px;background:#000;color:#0f0;padding:10px;font-size:11px;max-width:380px;z-index:1000;opacity:0.95;white-space:pre-wrap}</style>
+  <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}</style>
 </head>
 <body>
   <div id="map"></div>
@@ -15,7 +15,6 @@
     <label><input type="checkbox" id="showBase" onchange="filter()"> 標準地図ポリゴンも表示</label>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
   </div>
-  <div id="debug">読み込み開始...</div>
 
   <script>
     let map, layerGroup, baseFeatures = [], customFeatures = [], currentTanto = "";
@@ -26,49 +25,45 @@
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      const baseRes = await fetch('4ku_town.geojson');
-      logDebug('4ku_town.geojson フェッチ: ' + baseRes.status);
-      const baseJson = await baseRes.json();
+      const baseJson = await (await fetch('4ku_town.geojson')).json();
       baseFeatures = baseJson.features.filter(f => f.properties.CITY === "118");
-      logDebug('baseFeatures件数: ' + baseFeatures.length);
 
       let customJson = {features:[]};
-      try {
-        const ts = Date.now();
-        const customRes = await fetch('custom.geojson?t=' + ts, { cache: 'no-store' });
-        logDebug('custom.geojson フェッチ: ' + customRes.status);
-        customJson = await customRes.json();
-      } catch(e) { logDebug('custom.geojson フェッチ失敗: ' + e.message); }
+      try { customJson = await (await fetch('custom.geojson')).json(); } catch(e) {}
       customFeatures = customJson.features;
-      logDebug('customFeatures件数: ' + customFeatures.length);
 
-      const allFeatures = [...baseFeatures, ...customFeatures];
+      // ★ シートから最新statusをマージ（これでリロード後も保存される）
+      const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況");
+      const statusText = await statusRes.text();
+      const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
+      const statusMap = {};
+      statusRows.slice(1).forEach(r => {
+        const key = r[0]?.trim();
+        if (key) statusMap[key] = r[2]?.trim(); // C列 = status
+      });
 
-      const csvRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1");
-      logDebug('スプシCSV フェッチ: ' + csvRes.status);
-      const csvText = await csvRes.text();
+      customFeatures.forEach(f => {
+        if (statusMap[f.properties.KEY_CODE]) {
+          f.properties.status = statusMap[f.properties.KEY_CODE];
+        }
+      });
+
+      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
-      logDebug('CSV行数: ' + parsed.length);
-
       const dataMap = {};
       parsed.slice(1).forEach(r => {
         const code = r[6]?.trim();
         if (code) dataMap[code] = r[9]?.trim() || "";
       });
-      logDebug('dataMap作成完了');
 
-      allFeatures.forEach(f => {
-        if (f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_")) {
-          // カスタムはそのまま
-        } else {
+      [...baseFeatures, ...customFeatures].forEach(f => {
+        if (!f.properties.KEY_CODE || !f.properties.KEY_CODE.startsWith("NEW_")) {
           f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
         }
         f.properties.status = f.properties.status || "未完了";
       });
 
-      const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
-      logDebug('担当者Setサイズ: ' + tantoSet.size);
-
+      const tantoSet = new Set([...baseFeatures, ...customFeatures].map(f => f.properties.tanto).filter(Boolean));
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
         const opt = document.createElement("option");
@@ -79,19 +74,11 @@
       filter();
     }
 
-    function logDebug(msg) {
-      // const d = document.getElementById("debug");
-      // d.innerHTML += '<br>' + msg;
-      // console.log('[DEBUG]', msg);
-    }
-
     function renderMap(features) {
-      logDebug('renderMap呼び出し - 対象件数: ' + features.length);
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
 
       features.forEach(f => {
-        logDebug('描画中: ' + (f.properties.KEY_CODE || '不明') + ' tanto=' + f.properties.tanto);
         const color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
         L.geoJSON(f, {
           style: {fillColor: color, fillOpacity: 0.4, color: "#000", weight: 3},
@@ -101,7 +88,6 @@
               feature.properties.status = newStatus;
               this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
 
-              // ★ CORS回避（no-corsモード）
               fetch(gasUrl, {
                 method: "POST",
                 mode: "no-cors",
@@ -111,7 +97,7 @@
                   tanto: feature.properties.tanto,
                   status: newStatus
                 })
-              }).catch(() => {}); // エラー無視でPOSTだけ通す
+              }).catch(() => {});
 
               document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
             });
@@ -123,12 +109,10 @@
     function filter() {
       currentTanto = document.getElementById("tanto").value;
       const showBase = document.getElementById("showBase").checked;
-      logDebug('filter実行 - 選択担当者: "' + currentTanto + '" showBase:' + showBase);
 
       let filtered = [];
       if (currentTanto) {
         filtered = customFeatures.filter(f => f.properties.tanto === currentTanto);
-        logDebug('カスタムフィルタ結果: ' + filtered.length + '件');
       } else if (showBase) {
         filtered = baseFeatures;
       }
