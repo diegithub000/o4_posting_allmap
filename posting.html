@@ -19,7 +19,7 @@
 
   <script>
     let map, layerGroup, baseFeatures = [], customFeatures = [], currentTanto = "";
-    const gasUrl = "https://script.google.com/macros/s/AKfycbwLofmIQF5WF3s7H4tzuuNfURBAmqP0jV-vnGsouVp4lTFO-4ZnmIwFP9dj8yo50OHSUQ/exec";
+    const gasUrl = "https://script.google.com/macros/s/AKfycbyRD58ucDwxOyTVjcwWY5q8ZfpaJkQ228X-7nXt4wWDSlyHGT5FDJolxzs167zHs2lAcA/exec";
 
     async function init() {
       map = L.map('map').setView([34.69, 135.54], 14);
@@ -34,7 +34,8 @@
 
       let customJson = {features:[]};
       try {
-        const customRes = await fetch('custom.geojson');
+        const ts = Date.now();
+        const customRes = await fetch('custom.geojson?t=' + ts, { cache: 'no-store' });
         logDebug('custom.geojson フェッチ: ' + customRes.status);
         customJson = await customRes.json();
       } catch(e) { logDebug('custom.geojson フェッチ失敗: ' + e.message); }
@@ -99,7 +100,19 @@
               const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
               feature.properties.status = newStatus;
               this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
-              await fetch(gasUrl, {method:"POST", body:JSON.stringify({keyCode:feature.properties.KEY_CODE, tanto:feature.properties.tanto, status:newStatus})});
+
+              // ★ CORS回避（no-corsモード）
+              fetch(gasUrl, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  keyCode: feature.properties.KEY_CODE,
+                  tanto: feature.properties.tanto,
+                  status: newStatus
+                })
+              }).catch(() => {}); // エラー無視でPOSTだけ通す
+
               document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
             });
           }
