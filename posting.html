@@ -22,8 +22,12 @@
 
     async function init() {
       map = L.map('map').setView([34.69, 135.54], 14);
-      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
+// 精細航空写真タイル（高ズームでも鮮明）
+		L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom: 19, attribution: '国土地理院'}).addTo(map);
+
+// 標準地図
+//      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+//      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
       const baseJson = await (await fetch('4ku_town.geojson')).json();
       baseFeatures = baseJson.features.filter(f => f.properties.CITY === "118");
