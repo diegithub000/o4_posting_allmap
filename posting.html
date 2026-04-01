@@ -81,7 +81,7 @@
       features.forEach(f => {
         const color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
         L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: 0.4, color: "#000", weight: 3},
+          style: {fillColor: color, fillOpacity: 0.1, color: "#000", weight: 3},
           onEachFeature: (feature, layer) => {
             layer.on('click', async function() {
               const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
