@@ -30,8 +30,8 @@
 
     async function init() {
       map = L.map('map').setView([34.47, 135.55], 14);
-      // 建物輪郭が一番鮮明で安定するpaleタイルに変更
-      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+      
+      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom: 18, attribution: '国土地理院'}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.25}).addTo(map);
 
       const geoRes = await fetch('kawachinagano_town.geojson');
