@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"NAME": "あかしあ台1丁目"},
+      "geometry": {"type": "Polygon", "coordinates": [[[135.58, 34.45], [135.585, 34.45], [135.585, 34.455], [135.58, 34.455], [135.58, 34.45]]]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"NAME": "桐ヶ丘"},
+      "geometry": {"type": "Polygon", "coordinates": [[[135.58, 34.46], [135.585, 34.46], [135.585, 34.465], [135.58, 34.465], [135.58, 34.46]]]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"NAME": "自由が丘"},
+      "geometry": {"type": "Polygon", "coordinates": [[[135.59, 34.45], [135.595, 34.45], [135.595, 34.455], [135.59, 34.455], [135.59, 34.45]]]}
+    }
+  ]
+}
