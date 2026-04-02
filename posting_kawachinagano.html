@@ -23,15 +23,16 @@
     const gasUrl = "https://script.google.com/macros/s/AKfycbyRD58ucDwxOyTVjcwWY5q8ZfpaJkQ228X-7nXt4wWDSlyHGT5FDJolxzs167zHs2lAcA/exec";
 
     const townColors = {
-      "あかしあ台一丁目": "#ff4444",  // 赤
-      "桐ケ丘": "#4444ff",            // 青
-      "自由ケ丘": "#44ff44"           // 緑
+      "あかしあ台一丁目": "#ff4444",
+      "桐ケ丘": "#4444ff",
+      "自由ケ丘": "#44ff44"
     };
 
     async function init() {
       map = L.map('map').setView([34.47, 135.55], 14);
-      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/experimental/building/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
-//      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.8}).addTo(map);
+      // 建物輪郭が一番鮮明で安定するpaleタイルに変更
+      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.25}).addTo(map);
 
       const geoRes = await fetch('kawachinagano_town.geojson');
       const geoJson = await geoRes.json();
@@ -39,7 +40,6 @@
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
-      // 町プルダウン
       const townSelect = document.getElementById("townSelect");
       targetTowns.forEach(town => {
         const opt = document.createElement("option");
@@ -50,24 +50,21 @@
       filter();
     }
 
-    function renderMap(features, isSingleTown) {
+    function renderMap(features) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
 
       features.forEach(f => {
         let color, opacity;
-
-        if (isSingleTown) {
-          // 1町選択時：ベースは緑0.2、カスタムは赤/青0.4
+        if (currentTown) {
           if (f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_")) {
             color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
             opacity = 0.4;
           } else {
-            color = "#44ff44";  // 緑
+            color = "#44ff44";
             opacity = 0.2;
           }
         } else {
-          // 全体表示時：3町を赤青緑0.4
           const town = f.properties.S_NAME;
           color = townColors[town] || "#666666";
           opacity = 0.4;
@@ -81,12 +78,7 @@
                 const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
                 feature.properties.status = newStatus;
                 this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
-                fetch(gasUrl, {
-                  method: "POST",
-                  mode: "no-cors",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({keyCode: feature.properties.KEY_CODE, tanto: feature.properties.tanto, status: newStatus})
-                }).catch(() => {});
+                fetch(gasUrl, {method:"POST", mode:"no-cors", headers:{"Content-Type":"application/json"}, body:JSON.stringify({keyCode:feature.properties.KEY_CODE, tanto:feature.properties.tanto, status:newStatus})}).catch(()=>{});
                 document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
               });
             }
@@ -97,13 +89,9 @@
 
     function filter() {
       currentTown = document.getElementById("townSelect").value;
-
       let filtered = allFeatures;
-      if (currentTown) {
-        filtered = allFeatures.filter(f => f.properties.S_NAME === currentTown);
-      }
+      if (currentTown) filtered = allFeatures.filter(f => f.properties.S_NAME === currentTown);
 
-      // 専用custom.geojsonを合成
       let customFile = "";
       if (currentTown === "桐ケ丘") customFile = "kirigaoka_custom.geojson";
       else if (currentTown === "自由ケ丘") customFile = "jiyuugaoka_custom.geojson";
@@ -114,11 +102,11 @@
           .then(r => r.json())
           .then(customJson => {
             filtered = [...filtered, ...customJson.features];
-            renderMap(filtered, true);   // 1町選択モード
+            renderMap(filtered);
           })
-          .catch(() => renderMap(filtered, true));
+          .catch(() => renderMap(filtered));
       } else {
-        renderMap(filtered, false);      // 全体表示モード
+        renderMap(filtered);
       }
     }
 
