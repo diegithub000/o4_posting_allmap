@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>河内長野市 エリア確認</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}</style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="menu">
+    <select id="tanto" onchange="filter()"><option value="">全体表示</option></select>
+  </div>
+
+  <script>
+    let map, layerGroup, allFeatures = [];
+
+    async function init() {
+      map = L.map('map').setView([34.47, 135.55], 14);  // 河内長野市中心
+      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
+
+      // 河内長野市GeoJSONを読み込み
+      const geoRes = await fetch('kawachinagano_town.geojson');
+      const geoJson = await geoRes.json();
+
+      // 3町だけ厳密フィルタ（あかしあ台一丁目・桐ケ丘・自由ケ丘）
+      const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
+      allFeatures = geoJson.features.filter(f => 
+        targetTowns.includes(f.properties.S_NAME)
+      );
+
+      // スプシから担当者情報（G列・J列）
+      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
+      const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
+      const dataMap = {};
+      parsed.slice(1).forEach(r => {
+        const code = r[6]?.trim();
+        if (code) dataMap[code] = r[9]?.trim() || "";
+      });
+
+      allFeatures.forEach(f => {
+        f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
+      });
+
+      // 担当者プルダウン
+      const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
+      const select = document.getElementById("tanto");
+      tantoSet.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name; opt.textContent = name;
+        select.appendChild(opt);
+      });
+
+      renderMap(allFeatures);
+    }
+
+    function renderMap(features) {
+      if (layerGroup) map.removeLayer(layerGroup);
+      layerGroup = L.layerGroup().addTo(map);
+      features.forEach(f => {
+        const color = f.properties.tanto ? "#2e7d32" : "#666666";
+        L.geoJSON(f, {style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1}}).addTo(layerGroup);
+      });
+    }
+
+    function filter() {
+      const val = document.getElementById("tanto").value;
+      const filtered = val ? allFeatures.filter(f => f.properties.tanto === val) : allFeatures;
+      renderMap(filtered);
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
