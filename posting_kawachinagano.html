@@ -59,7 +59,7 @@
         if (currentTown) {
           if (f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_")) {
             color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
-            opacity = 0.4;
+            opacity = 0.32;
           } else {
             color = "#44ff44";
             opacity = 0.2;
@@ -67,7 +67,7 @@
         } else {
           const town = f.properties.S_NAME;
           color = townColors[town] || "#666666";
-          opacity = 0.4;
+          opacity = 0.32;
         }
 
         L.geoJSON(f, {
