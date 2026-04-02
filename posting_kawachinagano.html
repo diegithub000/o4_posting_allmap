@@ -11,14 +11,15 @@
 <body>
   <div id="map"></div>
   <div class="menu">
-    <select id="townSelect" onchange="filter()"><option value="">全体表示</option></select>
-    <select id="tanto" onchange="filter()"><option value="">担当者を選択</option></select>
+    <select id="townSelect" onchange="filter()">
+      <option value="">全体表示</option>
+    </select>
     <button onclick="getMyLocation()" style="margin-left:10px;padding:8px 12px">📍 現在地</button>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
   </div>
 
   <script>
-    let map, layerGroup, allFeatures = [], currentTanto = "", currentTown = "";
+    let map, layerGroup, allFeatures = [], currentTown = "";
     const gasUrl = "https://script.google.com/macros/s/AKfycbyRD58ucDwxOyTVjcwWY5q8ZfpaJkQ228X-7nXt4wWDSlyHGT5FDJolxzs167zHs2lAcA/exec";
 
     async function init() {
@@ -32,35 +33,12 @@
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
-      // 担当者情報
-      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
-      const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
-      const dataMap = {};
-      parsed.slice(1).forEach(r => {
-        const code = r[6]?.trim();
-        if (code) dataMap[code] = r[9]?.trim() || "";
-      });
-
-      allFeatures.forEach(f => {
-        f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
-        f.properties.status = f.properties.status || "未完了";
-      });
-
-      // 町プルダウン
+      // 町プルダウン作成
       const townSelect = document.getElementById("townSelect");
       targetTowns.forEach(town => {
         const opt = document.createElement("option");
         opt.value = town; opt.textContent = town;
         townSelect.appendChild(opt);
-      });
-
-      // 担当者プルダウン
-      const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
-      const tantoSelect = document.getElementById("tanto");
-      tantoSet.forEach(name => {
-        const opt = document.createElement("option");
-        opt.value = name; opt.textContent = name;
-        tantoSelect.appendChild(opt);
       });
 
       filter();
@@ -73,7 +51,7 @@
       features.forEach(f => {
         const color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
         L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: 0.3, color: "#000", weight: 3},
+          style: {fillColor: color, fillOpacity: 0.2, color: "#000", weight: 3},
           onEachFeature: (feature, layer) => {
             layer.on('click', async function() {
               const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
@@ -93,14 +71,30 @@
     }
 
     function filter() {
-      currentTanto = document.getElementById("tanto").value;
       currentTown = document.getElementById("townSelect").value;
 
       let filtered = allFeatures;
-      if (currentTown) filtered = filtered.filter(f => f.properties.S_NAME === currentTown);
-      if (currentTanto) filtered = filtered.filter(f => f.properties.tanto === currentTanto);
+      if (currentTown) {
+        filtered = allFeatures.filter(f => f.properties.S_NAME === currentTown);
+      }
 
-      renderMap(filtered);
+      // 専用custom.geojsonを合成
+      let customFile = "";
+      if (currentTown === "桐ケ丘") customFile = "kirigaoka_custom.geojson";
+      else if (currentTown === "自由ケ丘") customFile = "jiyuugaoka_custom.geojson";
+      else if (currentTown === "あかしあ台一丁目") customFile = "akasia1_custom.geojson";
+
+      if (customFile) {
+        fetch(customFile)
+          .then(r => r.json())
+          .then(customJson => {
+            filtered = [...filtered, ...customJson.features];
+            renderMap(filtered);
+          })
+          .catch(() => renderMap(filtered)); // customがなくても標準だけ表示
+      } else {
+        renderMap(filtered);
+      }
     }
 
     function getMyLocation() {
