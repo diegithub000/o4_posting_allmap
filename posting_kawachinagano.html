@@ -31,9 +31,23 @@
 
       const geoRes = await fetch('kawachinagano_town.geojson');
       const geoJson = await geoRes.json();
-
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
+
+      // ★ 正しいstatus読み込み（城東区で動いてるのと同じ）
+      const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
+      const statusText = await statusRes.text();
+      const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
+      const statusMap = {};
+      statusRows.slice(1).forEach(r => {
+        const key = r[0]?.trim();
+        if (key) statusMap[key] = r[2]?.trim();
+      });
+
+      // 標準ポリゴンにstatus反映
+      allFeatures.forEach(f => {
+        if (statusMap[f.properties.KEY_CODE]) f.properties.status = statusMap[f.properties.KEY_CODE];
+      });
 
       const townSelect = document.getElementById("townSelect");
       targetTowns.forEach(town => {
@@ -57,20 +71,17 @@
         let color, opacity, clickable;
 
         if (isSingle && !isCustom) {
-          // 町全体：青枠だけ（塗りつぶしなし・クリック不可）
           color = "#0066ff";
           opacity = 0;
           clickable = false;
         } else if (!isSingle) {
-          // ★ 全体表示時：3色塗分けを復活
           const townColors = {"あかしあ台一丁目":"#ff4444","桐ケ丘":"#4444ff","自由ケ丘":"#44ff44"};
           color = townColors[f.properties.S_NAME] || "#666666";
           opacity = 0.4;
           clickable = false;
         } else {
-          // customポリゴン：従来通り
           color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
-          opacity = 0.1;
+          opacity = 0.6;
           clickable = true;
         }
 
@@ -116,6 +127,10 @@
         fetch(customFile)
           .then(r => r.json())
           .then(customJson => {
+            // customもstatus反映
+            customJson.features.forEach(f => {
+              if (!f.properties.status) f.properties.status = "未完了";
+            });
             filtered = [...filtered, ...customJson.features];
             renderMap(filtered);
           })
