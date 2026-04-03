@@ -14,25 +14,19 @@
     <select id="townSelect" onchange="filter()">
       <option value="">全体表示</option>
     </select>
+    <button onclick="backToAll()" style="margin-left:10px;padding:8px 12px;background:#555;color:white;border:none;border-radius:4px">↑ 一つ上の階層に戻る</button>
     <button onclick="getMyLocation()" style="margin-left:10px;padding:8px 12px">📍 現在地</button>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
   </div>
 
   <script>
-    let map, layerGroup, allFeatures = [], currentTown = "";
+    let map, layerGroup, allFeatures = [], currentTown = "", locationMarker = null;
     const gasUrl = "https://script.google.com/macros/s/AKfycbyRD58ucDwxOyTVjcwWY5q8ZfpaJkQ228X-7nXt4wWDSlyHGT5FDJolxzs167zHs2lAcA/exec";
-
-    const townColors = {
-      "あかしあ台一丁目": "#ff4444",
-      "桐ケ丘": "#4444ff",
-      "自由ケ丘": "#44ff44"
-    };
 
     async function init() {
       map = L.map('map').setView([34.47, 135.55], 14);
-      
-//      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom: 18, attribution: '国土地理院'}).addTo(map);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.7}).addTo(map);
+      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
       const geoRes = await fetch('kawachinagano_town.geojson');
       const geoJson = await geoRes.json();
@@ -55,33 +49,22 @@
       layerGroup = L.featureGroup().addTo(map);
 
       features.forEach(f => {
-        let color, opacity;
-        if (currentTown) {
-          if (f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_")) {
-            color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
-            opacity = 0.28;
-          } else {
-            color = "#44ff44";
-            opacity = 0.17;
-          }
-        } else {
-          const town = f.properties.S_NAME;
-          color = townColors[town] || "#666666";
-          opacity = 0.28;
-        }
-
+        const color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
         L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: opacity, color: "#000", weight: 3},
+          style: {fillColor: color, fillOpacity: 0.2, color: "#000", weight: 3},
           onEachFeature: (feature, layer) => {
-            if (feature.properties.KEY_CODE && feature.properties.KEY_CODE.startsWith("NEW_")) {
-              layer.on('click', async function() {
-                const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
-                feature.properties.status = newStatus;
-                this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
-                fetch(gasUrl, {method:"POST", mode:"no-cors", headers:{"Content-Type":"application/json"}, body:JSON.stringify({keyCode:feature.properties.KEY_CODE, tanto:feature.properties.tanto, status:newStatus})}).catch(()=>{});
-                document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
-              });
-            }
+            layer.on('click', async function() {
+              const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
+              feature.properties.status = newStatus;
+              this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
+              fetch(gasUrl, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({keyCode: feature.properties.KEY_CODE, tanto: feature.properties.tanto, status: newStatus})
+              }).catch(() => {});
+              document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
+            });
           }
         }).addTo(layerGroup);
       });
@@ -89,8 +72,11 @@
 
     function filter() {
       currentTown = document.getElementById("townSelect").value;
+
       let filtered = allFeatures;
-      if (currentTown) filtered = allFeatures.filter(f => f.properties.S_NAME === currentTown);
+      if (currentTown) {
+        filtered = allFeatures.filter(f => f.properties.S_NAME === currentTown);
+      }
 
       let customFile = "";
       if (currentTown === "桐ケ丘") customFile = "kirigaoka_custom.geojson";
@@ -110,14 +96,24 @@
       }
     }
 
+    // 現在地表示（古いピンは自動削除）
     function getMyLocation() {
+      if (locationMarker) map.removeLayer(locationMarker); // 古いピンを削除
+
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
-          L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map)
+          locationMarker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map)
             .bindPopup("📍 現在地").openPopup();
           map.flyTo([pos.coords.latitude, pos.coords.longitude], 18);
         });
       }
+    }
+
+    // 一つ上の階層に戻る（全体表示）
+    function backToAll() {
+      document.getElementById("townSelect").value = "";
+      currentTown = "";
+      filter();
     }
 
     window.onload = init;
