@@ -14,13 +14,14 @@
     <select id="townSelect" onchange="filter()">
       <option value="">全体表示</option>
     </select>
-    <button onclick="backToAll()" style="margin-left:10px;padding:8px 12px;background:#555;color:white;border:none;border-radius:4px">↑ 一つ上の階層に戻る</button>
-    <button onclick="getMyLocation()" style="margin-left:10px;padding:8px 12px">📍 現在地</button>
+    <button onclick="backToAll()" style="margin-left:8px;padding:8px 12px">全体表示</button>
+    <button onclick="backToMenu()" style="margin-left:8px;padding:8px 12px;background:#555;color:white">メニューに戻る</button>
+    <button onclick="getMyLocation()" style="margin-left:8px;padding:8px 12px">📍 現在地</button>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
   </div>
 
   <script>
-    let map, layerGroup, allFeatures = [], currentTown = "", locationMarker = null;
+    let map, layerGroup, allFeatures = [], currentTown = "";
     const gasUrl = "https://script.google.com/macros/s/AKfycbyRD58ucDwxOyTVjcwWY5q8ZfpaJkQ228X-7nXt4wWDSlyHGT5FDJolxzs167zHs2lAcA/exec";
 
     async function init() {
@@ -48,21 +49,33 @@
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
 
+      const isSingle = !!currentTown;
+
       features.forEach(f => {
-        const color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
+        let opacity = isSingle ? 0.1 : 0.4;   // 選択時は0.1、全体は0.4
+        let color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
+
+        if (!isSingle) {
+          // 全体表示時は町ごとに色分け
+          const townColors = {"あかしあ台一丁目":"#ff4444","桐ケ丘":"#4444ff","自由ケ丘":"#44ff44"};
+          color = townColors[f.properties.S_NAME] || "#666666";
+        }
+
         L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: 0.2, color: "#000", weight: 3},
+          style: {fillColor: color, fillOpacity: opacity, color: "#000", weight: 3},
           onEachFeature: (feature, layer) => {
             layer.on('click', async function() {
               const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
               feature.properties.status = newStatus;
               this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
+
               fetch(gasUrl, {
                 method: "POST",
                 mode: "no-cors",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({keyCode: feature.properties.KEY_CODE, tanto: feature.properties.tanto, status: newStatus})
               }).catch(() => {});
+
               document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
             });
           }
@@ -72,8 +85,8 @@
 
     function filter() {
       currentTown = document.getElementById("townSelect").value;
-
       let filtered = allFeatures;
+
       if (currentTown) {
         filtered = allFeatures.filter(f => f.properties.S_NAME === currentTown);
       }
@@ -96,24 +109,24 @@
       }
     }
 
-    // 現在地表示（古いピンは自動削除）
     function getMyLocation() {
-      if (locationMarker) map.removeLayer(locationMarker); // 古いピンを削除
-
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
-          locationMarker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map)
+          L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map)
             .bindPopup("📍 現在地").openPopup();
           map.flyTo([pos.coords.latitude, pos.coords.longitude], 18);
         });
       }
     }
 
-    // 一つ上の階層に戻る（全体表示）
     function backToAll() {
       document.getElementById("townSelect").value = "";
       currentTown = "";
       filter();
+    }
+
+    function backToMenu() {
+      location.href = "support.html";
     }
 
     window.onload = init;
