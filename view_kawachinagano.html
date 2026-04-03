@@ -12,23 +12,22 @@
   <div id="map"></div>
   <div class="menu">
     <select id="tanto" onchange="filter()"><option value="">全体表示</option></select>
+    <button onclick="backToMenu()" style="margin-left:8px;padding:8px 12px;background:#555;color:white">メニューに戻る</button>
+    <button onclick="getMyLocation()" style="margin-left:8px;padding:8px 12px">📍 現在地</button>
   </div>
 
   <script>
-    let map, layerGroup, allFeatures = [];
-
+    let map, layerGroup, allFeatures = [], locationMarker = null;
     async function init() {
       map = L.map('map').setView([34.47, 135.55], 14);
-      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:18}).addTo(map);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
       const geoRes = await fetch('kawachinagano_town.geojson');
       const geoJson = await geoRes.json();
-
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
-      // 担当者情報読み込み（スプシ連携はそのまま）
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
@@ -55,13 +54,11 @@
     function renderMap(features) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.layerGroup().addTo(map);
-
       const townColors = {
-        "あかしあ台一丁目": "#ff4444",  // 赤
-        "桐ケ丘": "#4444ff",            // 青
-        "自由ケ丘": "#44ff44"           // 緑
+        "あかしあ台一丁目": "#ff4444",
+        "桐ケ丘": "#4444ff",
+        "自由ケ丘": "#44ff44"
       };
-
       features.forEach(f => {
         const town = f.properties.S_NAME;
         const color = townColors[town] || "#666666";
@@ -75,6 +72,23 @@
       const val = document.getElementById("tanto").value;
       const filtered = val ? allFeatures.filter(f => f.properties.tanto === val) : allFeatures;
       renderMap(filtered);
+    }
+
+    // 現在位置（前のピンは自動削除）
+    function getMyLocation() {
+      if (locationMarker) map.removeLayer(locationMarker);
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          locationMarker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map)
+            .bindPopup("📍 現在地").openPopup();
+          map.flyTo([pos.coords.latitude, pos.coords.longitude], 18);
+        });
+      }
+    }
+
+    function backToMenu() {
+      location.href = "support.html";
     }
 
     window.onload = init;
