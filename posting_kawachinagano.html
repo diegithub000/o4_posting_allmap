@@ -21,7 +21,7 @@
   </div>
 
   <script>
-    let map, layerGroup, allFeatures = [], currentTown = "";
+    let map, layerGroup, allFeatures = [], currentTown = "", statusMap = {};
     const gasUrl = "https://script.google.com/macros/s/AKfycbwqhcirV-B3pG7al9C3D4K8zWPCeA1E4nnEqZwnfLzABHtNC3HVgY0fv4W2gMMCOiWwSw/exec";
 
     async function init() {
@@ -34,17 +34,16 @@
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
-      // ★ 城東区と同じ正しいスプシ読み込み（これでリロード時も反映される）
+      // 正しいスプシstatus読み込み
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
-      const statusMap = {};
+      statusMap = {};
       statusRows.slice(1).forEach(r => {
         const key = r[0]?.trim();
         if (key) statusMap[key] = r[2]?.trim();
       });
 
-      // 標準ポリゴンにstatus反映
       allFeatures.forEach(f => {
         if (statusMap[f.properties.KEY_CODE]) f.properties.status = statusMap[f.properties.KEY_CODE];
       });
@@ -131,13 +130,9 @@
         fetch(customFile)
           .then(r => r.json())
           .then(customJson => {
-            // ★ custom追加時にもstatusを正しく反映（ここが抜けていた）
             customJson.features.forEach(f => {
               if (!f.properties.status) f.properties.status = "未完了";
-              // statusMapがあれば上書き
-              if (statusMap && statusMap[f.properties.KEY_CODE]) {
-                f.properties.status = statusMap[f.properties.KEY_CODE];
-              }
+              if (statusMap[f.properties.KEY_CODE]) f.properties.status = statusMap[f.properties.KEY_CODE];
             });
             filtered = [...filtered, ...customJson.features];
             renderMap(filtered);
