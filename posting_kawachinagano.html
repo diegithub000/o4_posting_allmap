@@ -34,7 +34,7 @@
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
-      // ★ 正しいstatus読み込み（gid付き）
+      // ★ 城東区で動いている正しいスプシ読み込み
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -71,18 +71,15 @@
         let color, opacity, clickable;
 
         if (isSingle && !isCustom) {
-          // 町全体：青枠だけ（塗りつぶしなし・クリック不可）
           color = "#0066ff";
           opacity = 0;
           clickable = false;
         } else if (!isSingle) {
-          // 全体表示：3色塗分け
           const townColors = {"あかしあ台一丁目":"#ff4444","桐ケ丘":"#4444ff","自由ケ丘":"#44ff44"};
           color = townColors[f.properties.S_NAME] || "#666666";
           opacity = 0.4;
           clickable = false;
         } else {
-          // customポリゴン：クリック可能
           const isDone = f.properties.status === "完了";
           color = isDone ? "#0066ff" : "#ff4444";
           opacity = isDone ? 0.6 : 0.2;
