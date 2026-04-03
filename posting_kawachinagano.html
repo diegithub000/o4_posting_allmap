@@ -52,34 +52,44 @@
       const isSingle = !!currentTown;
 
       features.forEach(f => {
-        let opacity = isSingle ? 0.1 : 0.4;   // 選択時は0.1、全体は0.4
-        let color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
+        const isCustom = f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_");
 
-        if (!isSingle) {
-          // 全体表示時は町ごとに色分け
-          const townColors = {"あかしあ台一丁目":"#ff4444","桐ケ丘":"#4444ff","自由ケ丘":"#44ff44"};
-          color = townColors[f.properties.S_NAME] || "#666666";
+        let color, opacity, clickable;
+
+        if (isSingle && !isCustom) {
+          // 町全体の境界線だけ（青枠・塗りつぶしなし・クリック不可）
+          color = "#0066ff";
+          opacity = 0;
+          clickable = false;
+        } else {
+          // customポリゴンは従来通り
+          color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
+          opacity = isSingle ? 0.1 : 0.4;
+          clickable = true;
         }
 
-        L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: opacity, color: "#000", weight: 3},
-          onEachFeature: (feature, layer) => {
+        const geoLayer = L.geoJSON(f, {
+          style: {fillColor: color, fillOpacity: opacity, color: color, weight: isCustom ? 3 : 2}
+        }).addTo(layerGroup);
+
+        if (clickable) {
+          geoLayer.eachLayer(layer => {
             layer.on('click', async function() {
-              const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
-              feature.properties.status = newStatus;
+              const newStatus = f.properties.status === "完了" ? "未完了" : "完了";
+              f.properties.status = newStatus;
               this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
 
               fetch(gasUrl, {
                 method: "POST",
                 mode: "no-cors",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({keyCode: feature.properties.KEY_CODE, tanto: feature.properties.tanto, status: newStatus})
+                body: JSON.stringify({keyCode: f.properties.KEY_CODE, tanto: f.properties.tanto, status: newStatus})
               }).catch(() => {});
 
-              document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
+              document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
             });
-          }
-        }).addTo(layerGroup);
+          });
+        }
       });
     }
 
