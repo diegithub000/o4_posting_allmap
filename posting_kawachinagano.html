@@ -20,13 +20,13 @@
     
     <!-- ★ 地図切り替え -->
     <select id="mapType" onchange="changeMapType()" style="margin-left:8px;padding:8px 12px">
-      <option value="std">標準地図</option>
+      <option value="std" selected>標準地図</option>
       <option value="seamless">航空写真</option>
-      <option value="pale" selected>淡色地図</option>
+      <option value="pale">淡色地図</option>
     </select>
 
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.4</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.5</div>
   </div>
 
   <script>
@@ -35,7 +35,7 @@
 
     async function init() {
       map = L.map('map').setView([34.47, 135.55], 14);
-      changeMapType(); // 初期地図読み込み
+      changeMapType(); // デフォルト標準地図
 
       const geoRes = await fetch('kawachinagano_town.geojson');
       const geoJson = await geoRes.json();
@@ -70,7 +70,7 @@
       if (currentTileLayer) map.removeLayer(currentTileLayer);
 
       if (type === "seamless") {
-        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom:19, attribution: '国土地理院'});
+        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom:18, attribution: '国土地理院'});
       } else if (type === "pale") {
         currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {maxZoom:19});
       } else {
@@ -79,7 +79,6 @@
       currentTileLayer.addTo(map);
     }
 
-    // 以降のrenderMap, filter, getMyLocation, backToAll, backToMenuは前回と同じ（省略せず完全コード）
     function renderMap(features) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
