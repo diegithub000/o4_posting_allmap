@@ -18,7 +18,7 @@
     <button onclick="backToMenu()" style="margin-left:8px;padding:8px 12px;background:#555;color:white">メニューに戻る</button>
     <button onclick="getMyLocation()" style="margin-left:8px;padding:8px 12px">📍 現在地</button>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.3</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.4</div>
   </div>
 
   <script>
@@ -35,6 +35,7 @@
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
+      // ★ 正しいstatus読み込み
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -133,7 +134,6 @@
         filtered = allFeatures.filter(f => f.properties.S_NAME === currentTown);
       }
 
-      // ★ 関係ないcustomは一切読み込まない
       let customFile = "";
       if (currentTown === "桐ケ丘") customFile = "kirigaoka_custom.geojson";
       else if (currentTown === "自由ケ丘") customFile = "jiyuugaoka_custom.geojson";
@@ -145,7 +145,10 @@
           .then(customJson => {
             customJson.features.forEach(f => {
               if (!f.properties.status) f.properties.status = "未完了";
-              if (statusMap[f.properties.KEY_CODE]) f.properties.status = statusMap[f.properties.KEY_CODE];
+              // ★ ここで確実にstatusMapを適用
+              if (statusMap[f.properties.KEY_CODE]) {
+                f.properties.status = statusMap[f.properties.KEY_CODE];
+              }
             });
             filtered = [...filtered, ...customJson.features];
             renderMap(filtered);
