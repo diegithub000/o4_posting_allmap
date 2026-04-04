@@ -25,12 +25,12 @@
     </select>
 
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.3</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.1</div>
   </div>
 
   <script>
     let map, layerGroup, allFeatures = [], currentTown = "", statusMap = {}, currentTileLayer = null;
-    const gasUrl = "https://script.google.com/macros/s/AKfycby8bSrSddO-cV6YCr2GRve8y_xBzl1fG4xK84jBBCzGTByazAweogtV9RmqZ6ORqYJpjg/exec";
+    const gasUrl = "https://script.google.com/macros/s/AKfycbzm5tyIDmh-WMRgSV5r2Z6C3rmYdjOKmC-wG1okPw6wo0mrSmzqNuA8PP7y6sPXz98puA/exec";
 
     async function init() {
       map = L.map('map').setView([34.47, 135.55], 14);
@@ -41,6 +41,7 @@
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
+      // 最新statusを確実に取得
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -62,15 +63,6 @@
       });
 
       filter();
-
-      // ズーム19到達時にOpenStreetMap自動切り替え
-      map.on('zoomend', () => {
-        if (map.getZoom() >= 19 && currentTileLayer && !currentTileLayer._url.includes("openstreetmap")) {
-          if (currentTileLayer) map.removeLayer(currentTileLayer);
-          currentTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
-          currentTileLayer.addTo(map);
-        }
-      });
     }
 
     function changeMapType() {
@@ -98,7 +90,10 @@
         const isCustom = f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_");
         const isDone = f.properties.status === "完了";
 
-        let color, opacity, borderColor, clickable;
+        let color = isDone ? "#0066ff" : "#ff4444";
+        let opacity = isDone ? 0.6 : 0.2;
+        let borderColor = isDone ? "#0066ff" : "#ff4444";
+        let clickable = true;
 
         if (isSingle && !isCustom) {
           color = "#0066ff";
@@ -111,11 +106,6 @@
           opacity = 0.4;
           borderColor = color;
           clickable = false;
-        } else {
-          color = isDone ? "#0066ff" : "#ff4444";
-          opacity = isDone ? 0.6 : 0.2;
-          borderColor = isDone ? "#0066ff" : "#ff4444";
-          clickable = true;
         }
 
         const geoLayer = L.geoJSON(f, {
@@ -165,7 +155,8 @@
       else if (currentTown === "あかしあ台一丁目") customFile = "akasia1_custom.geojson";
 
       if (customFile && currentTown) {
-        fetch(customFile)
+        // ★ キャッシュ無効化
+        fetch(customFile + '?t=' + Date.now())
           .then(r => r.json())
           .then(customJson => {
             customJson.features.forEach(f => {
