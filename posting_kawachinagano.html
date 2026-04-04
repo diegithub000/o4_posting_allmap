@@ -18,6 +18,8 @@
     <button onclick="backToMenu()" style="margin-left:8px;padding:8px 12px;background:#555;color:white">メニューに戻る</button>
     <button onclick="getMyLocation()" style="margin-left:8px;padding:8px 12px">📍 現在地</button>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
+    <!-- ★ ビルド番号 -->
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.2</div>
   </div>
 
   <script>
@@ -34,7 +36,6 @@
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
-      // 正しいスプシstatus読み込み
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -61,6 +62,8 @@
     function renderMap(features) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
+
+      let bounds = L.latLngBounds([]);
 
       const isSingle = !!currentTown;
 
@@ -92,6 +95,8 @@
           style: {fillColor: color, fillOpacity: opacity, color: borderColor, weight: isCustom ? 3 : 2}
         }).addTo(layerGroup);
 
+        bounds.extend(geoLayer.getBounds());
+
         if (clickable) {
           geoLayer.eachLayer(layer => {
             layer.on('click', async function() {
@@ -111,6 +116,15 @@
           });
         }
       });
+
+      // ★ 自動フォーカス
+      if (bounds.isValid()) {
+        if (isSingle) {
+          map.fitBounds(bounds, {padding: [50, 50]});
+        } else {
+          map.fitBounds(bounds, {padding: [30, 30]});
+        }
+      }
     }
 
     function filter() {
