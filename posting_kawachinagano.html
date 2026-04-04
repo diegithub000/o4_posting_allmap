@@ -17,25 +17,31 @@
     <button onclick="backToAll()" style="margin-left:8px;padding:8px 12px">全体表示</button>
     <button onclick="backToMenu()" style="margin-left:8px;padding:8px 12px;background:#555;color:white">メニューに戻る</button>
     <button onclick="getMyLocation()" style="margin-left:8px;padding:8px 12px">📍 現在地</button>
+    
+    <!-- ★ 地図切り替え -->
+    <select id="mapType" onchange="changeMapType()" style="margin-left:8px;padding:8px 12px">
+      <option value="std">標準地図</option>
+      <option value="seamless">航空写真</option>
+      <option value="pale" selected>淡色地図</option>
+    </select>
+
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
     <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.4</div>
   </div>
 
   <script>
-    let map, layerGroup, allFeatures = [], currentTown = "", statusMap = {};
+    let map, layerGroup, allFeatures = [], currentTown = "", statusMap = {}, currentTileLayer = null;
     const gasUrl = "https://script.google.com/macros/s/AKfycbwqhcirV-B3pG7al9C3D4K8zWPCeA1E4nnEqZwnfLzABHtNC3HVgY0fv4W2gMMCOiWwSw/exec";
 
     async function init() {
       map = L.map('map').setView([34.47, 135.55], 14);
-      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
+      changeMapType(); // 初期地図読み込み
 
       const geoRes = await fetch('kawachinagano_town.geojson');
       const geoJson = await geoRes.json();
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
-      // ★ 正しいstatus読み込み
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -59,6 +65,21 @@
       filter();
     }
 
+    function changeMapType() {
+      const type = document.getElementById("mapType").value;
+      if (currentTileLayer) map.removeLayer(currentTileLayer);
+
+      if (type === "seamless") {
+        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom:19, attribution: '国土地理院'});
+      } else if (type === "pale") {
+        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {maxZoom:19});
+      } else {
+        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19});
+      }
+      currentTileLayer.addTo(map);
+    }
+
+    // 以降のrenderMap, filter, getMyLocation, backToAll, backToMenuは前回と同じ（省略せず完全コード）
     function renderMap(features) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
@@ -145,10 +166,7 @@
           .then(customJson => {
             customJson.features.forEach(f => {
               if (!f.properties.status) f.properties.status = "未完了";
-              // ★ ここで確実にstatusMapを適用
-              if (statusMap[f.properties.KEY_CODE]) {
-                f.properties.status = statusMap[f.properties.KEY_CODE];
-              }
+              if (statusMap[f.properties.KEY_CODE]) f.properties.status = statusMap[f.properties.KEY_CODE];
             });
             filtered = [...filtered, ...customJson.features];
             renderMap(filtered);
