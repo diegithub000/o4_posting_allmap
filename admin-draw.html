@@ -11,23 +11,54 @@
 </head>
 <body>
   <div id="map"></div>
+
+  <div style="position:absolute;top:10px;left:10px;z-index:1000;background:white;padding:10px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);display:flex;gap:8px;align-items:center">
+    <input type="file" id="geoFile" accept=".geojson" style="display:none">
+    <button onclick="document.getElementById('geoFile').click()" style="padding:8px 12px">📂 GeoJSONを選択して読み込む</button>
+    <button onclick="backToMenu()" style="padding:8px 12px;background:#555;color:white">メニューに戻る</button>
+    <button onclick="fitAll()" style="padding:8px 12px">全体表示</button>
+    <!-- ★ ビルド番号 -->
+    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.000.3</div>
+  </div>
+
   <script>
-    const map = L.map('map').setView([34.69, 135.54], 14);
+    let map = L.map('map').setView([34.47, 135.55], 14);
     L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
-    // 既存のcustom.geojsonをロード（あれば編集可能に）
+    // ファイル選択イベント
+    document.getElementById('geoFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        try {
+          const data = JSON.parse(ev.target.result);
+          drawnItems.clearLayers(); // 既存をクリア
+          L.geoJSON(data, {
+            onEachFeature: (feature, layer) => drawnItems.addLayer(layer)
+          });
+          fitAll(); // 読み込んだら自動フォーカス
+        } catch(err) {
+          alert("GeoJSONの読み込みに失敗しました");
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // 既存のcustom.geojsonを初期ロード（任意）
     fetch('custom.geojson')
       .then(r => r.json())
       .then(data => {
         L.geoJSON(data, {
           onEachFeature: (feature, layer) => drawnItems.addLayer(layer)
         });
+        fitAll();
       })
-      .catch(() => { /* 初回は空 */ });
+      .catch(() => {});
 
     const drawControl = new L.Control.Draw({
       edit: { featureGroup: drawnItems },
@@ -55,6 +86,22 @@
       a.click();
     };
     document.body.appendChild(saveBtn);
+
+    // 全体表示フォーカス
+    function fitAll() {
+      if (drawnItems.getLayers().length > 0) {
+        map.fitBounds(drawnItems.getBounds(), {padding: [50, 50]});
+      }
+    }
+
+    function backToMenu() {
+      location.href = "support.html";
+    }
+
+    window.onload = () => {
+      // 初回ロード時に全体表示
+      setTimeout(fitAll, 800);
+    };
   </script>
 </body>
 </html>
