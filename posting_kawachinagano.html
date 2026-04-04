@@ -18,8 +18,7 @@
     <button onclick="backToMenu()" style="margin-left:8px;padding:8px 12px;background:#555;color:white">メニューに戻る</button>
     <button onclick="getMyLocation()" style="margin-left:8px;padding:8px 12px">📍 現在地</button>
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <!-- ★ ビルド番号 -->
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.2</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.3</div>
   </div>
 
   <script>
@@ -117,7 +116,6 @@
         }
       });
 
-      // ★ 自動フォーカス
       if (bounds.isValid()) {
         if (isSingle) {
           map.fitBounds(bounds, {padding: [50, 50]});
@@ -135,6 +133,7 @@
         filtered = allFeatures.filter(f => f.properties.S_NAME === currentTown);
       }
 
+      // ★ 関係ないcustomは一切読み込まない
       let customFile = "";
       if (currentTown === "桐ケ丘") customFile = "kirigaoka_custom.geojson";
       else if (currentTown === "自由ケ丘") customFile = "jiyuugaoka_custom.geojson";
