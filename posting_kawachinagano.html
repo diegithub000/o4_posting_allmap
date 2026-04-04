@@ -17,30 +17,25 @@
     <button onclick="backToAll()" style="margin-left:8px;padding:8px 12px">全体表示</button>
     <button onclick="backToMenu()" style="margin-left:8px;padding:8px 12px;background:#555;color:white">メニューに戻る</button>
     <button onclick="getMyLocation()" style="margin-left:8px;padding:8px 12px">📍 現在地</button>
-    
-    <select id="mapType" onchange="changeMapType()" style="margin-left:8px;padding:8px 12px">
-      <option value="std" selected>標準地図</option>
-      <option value="seamless">航空写真</option>
-      <option value="pale">淡色地図</option>
-    </select>
-
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.6</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.8</div>
   </div>
 
   <script>
-    let map, layerGroup, allFeatures = [], currentTown = "", statusMap = {}, currentTileLayer = null;
+    let map, layerGroup, allFeatures = [], currentTown = "", statusMap = {};
     const gasUrl = "https://script.google.com/macros/s/AKfycbwqhcirV-B3pG7al9C3D4K8zWPCeA1E4nnEqZwnfLzABHtNC3HVgY0fv4W2gMMCOiWwSw/exec";
 
     async function init() {
       map = L.map('map').setView([34.47, 135.55], 14);
-      changeMapType();
+      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
       const geoRes = await fetch('kawachinagano_town.geojson');
       const geoJson = await geoRes.json();
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
+      // 正しいstatus読み込み
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -62,38 +57,13 @@
       });
 
       filter();
-
-      // ★ ズーム19到達時に自動でOpenStreetMapに切り替え
-      map.on('zoomend', () => {
-        if (map.getZoom() >= 19) {
-          if (currentTileLayer) map.removeLayer(currentTileLayer);
-          currentTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
-          currentTileLayer.addTo(map);
-        }
-      });
     }
 
-    function changeMapType() {
-      const type = document.getElementById("mapType").value;
-      if (currentTileLayer) map.removeLayer(currentTileLayer);
-
-      if (type === "seamless") {
-        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom:18});
-      } else if (type === "pale") {
-        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {maxZoom:19});
-      } else {
-        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19});
-      }
-      currentTileLayer.addTo(map);
-    }
-
-    // renderMap, filter, getMyLocation, backToAll, backToMenu は前回と同じ（省略せず完全コード）
     function renderMap(features) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
 
       let bounds = L.latLngBounds([]);
-
       const isSingle = !!currentTown;
 
       features.forEach(f => {
@@ -127,20 +97,24 @@
         bounds.extend(geoLayer.getBounds());
 
         if (clickable) {
+          // ★ ここを安全に修正（クロージャ問題を完全排除）
           geoLayer.eachLayer(layer => {
             layer.on('click', async function() {
-              const newStatus = f.properties.status === "完了" ? "未完了" : "完了";
-              f.properties.status = newStatus;
+              // この時点のfeatureを直接取得
+              const feature = this.feature || f;
+              const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
+              feature.properties.status = newStatus;
+
               this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444", color: newStatus === "完了" ? "#0066ff" : "#ff4444"});
 
               fetch(gasUrl, {
                 method: "POST",
                 mode: "no-cors",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({keyCode: f.properties.KEY_CODE, tanto: f.properties.tanto, status: newStatus})
+                body: JSON.stringify({keyCode: feature.properties.KEY_CODE, tanto: feature.properties.tanto, status: newStatus})
               }).catch(() => {});
 
-              document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
+              document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
             });
           });
         }
