@@ -25,7 +25,7 @@
     </select>
 
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.1</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.2</div>
   </div>
 
   <script>
@@ -41,7 +41,6 @@
       const targetTowns = ["あかしあ台一丁目", "桐ケ丘", "自由ケ丘"];
       allFeatures = geoJson.features.filter(f => targetTowns.includes(f.properties.S_NAME));
 
-      // 最新statusを確実に取得
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -63,6 +62,15 @@
       });
 
       filter();
+
+      // ズーム19到達時にOpenStreetMap自動切り替え（航空写真以外）
+      map.on('zoomend', () => {
+        if (map.getZoom() >= 19 && currentTileLayer && !currentTileLayer._url.includes("openstreetmap")) {
+          if (currentTileLayer) map.removeLayer(currentTileLayer);
+          currentTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
+          currentTileLayer.addTo(map);
+        }
+      });
     }
 
     function changeMapType() {
@@ -155,7 +163,6 @@
       else if (currentTown === "あかしあ台一丁目") customFile = "akasia1_custom.geojson";
 
       if (customFile && currentTown) {
-        // ★ キャッシュ無効化
         fetch(customFile + '?t=' + Date.now())
           .then(r => r.json())
           .then(customJson => {
