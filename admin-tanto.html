@@ -23,7 +23,7 @@
     <div style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#455a64">👤 担当者メンテナンス</div>
     <button id="changeBtn" onclick="openChangeModal()" class="btn-disable" style="background:#455a64;color:white">担当者変更</button>
     <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 インデックスに戻る</button>
-    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.4 - 担当者メンテナンス</div>
+    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.3 - 担当者メンテナンス</div>
   </div>
 
   <div id="modal" class="modal">
@@ -52,12 +52,9 @@
       const baseJson = await baseRes.json();
       allFeatures = baseJson.features;
 
-      // ★ スプシ読み込みを再検査・強化（キャッシュ完全無効化）
+      // ★ ここを強化：キャッシュ完全無効化
       const csvUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1&t=" + Date.now();
-      const csvText = await (await fetch(csvUrl, { 
-        cache: 'no-store',
-        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
-      })).text();
+      const csvText = await (await fetch(csvUrl, { cache: 'no-store' })).text();
 
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
@@ -139,13 +136,13 @@
         body: JSON.stringify({hText: hText, newTanto: newTanto})
       }).catch(() => {});
 
-      alert("✅ 更新を送信しました。ページを再読み込みします。");
+      alert("✅ 更新を送信しました。少し待ってから再読み込みします。");
       document.getElementById("modal").style.display = "none";
 
-      // 担当者変更後は必ずスプシから最新データを再ロード
+      // ★ 確実に最新を取得するため、0.5秒待機後にハードリロード
       setTimeout(() => {
         location.reload(true);
-      }, 600);
+      }, 500);
     }
 
     function backToIndex() {
