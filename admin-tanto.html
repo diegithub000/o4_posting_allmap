@@ -10,17 +10,10 @@
     body{margin:0}#map{height:100vh}
     .menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000;font-size:15px}
     select, button{font-size:15px;padding:10px 14px;}
-    .modal{
-      display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:2000;
-      align-items:center;justify-content:center;
-    }
-    .modal-content{
-      background:white;padding:30px;border-radius:12px;width:380px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);
-    }
-    .modal-content input{
-      width:100%;padding:12px;margin:15px 0;font-size:16px;
-    }
-    .btn-disable{opacity:0.4;pointer-events:none;}
+    .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:2000;align-items:center;justify-content:center}
+    .modal-content{background:white;padding:30px;border-radius:12px;width:380px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
+    .modal-content input{width:100%;padding:12px;margin:15px 0;font-size:16px}
+    .btn-disable{opacity:0.4;pointer-events:none}
   </style>
 </head>
 <body>
@@ -28,15 +21,11 @@
 
   <div class="menu">
     <div style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#455a64">👤 担当者メンテナンス</div>
-    
     <button id="changeBtn" onclick="openChangeModal()" class="btn-disable" style="background:#455a64;color:white">担当者変更</button>
-    
     <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 インデックスに戻る</button>
-    
-    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.0 - 担当者メンテナンス</div>
+    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.1 - 担当者メンテナンス</div>
   </div>
 
-  <!-- 担当者変更モーダル -->
   <div id="modal" class="modal">
     <div class="modal-content">
       <h3>担当者を変更します</h3>
@@ -52,24 +41,23 @@
 
   <script>
     let map, layerGroup, allFeatures = [], selectedFeature = null;
-    const gasUrl = "https://script.google.com/macros/s/AKfycbywRXBSFfYRae1MWS98e4MCZPZcJmElQD576Rg1eDOteg2xIoWSjeYiYPknsKBdc0dy9A/exec"; 
+    const gasUrl = "https://script.google.com/macros/s/AKfycbzm5tyIDmh-WMRgSV5r2Z6C3rmYdjOKmC-wG1okPw6wo0mrSmzqNuA8PP7y6sPXz98puA/exec";
 
     async function init() {
       map = L.map('map').setView([34.69, 135.54], 14);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      // 4ku_town.geojson 全区読み込み（view.htmlと同一）
       const baseRes = await fetch('4ku_town.geojson');
       const baseJson = await baseRes.json();
       allFeatures = baseJson.features;
 
-      // スプレッドシートから担当者・地名テキスト取得
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
+
       parsed.slice(1).forEach(r => {
-        const key = r[6]?.trim(); // KEY_CODE
+        const key = r[6]?.toString().trim();   // 厳密にtrim
         if (key) {
           dataMap[key] = {
             tanto: r[9]?.trim() || "",
@@ -100,25 +88,22 @@
           style: {fillColor: color, fillOpacity: opacity, color: "#333", weight: 1}
         }).addTo(layerGroup);
 
-        // クリックで選択
+        // ツールチップ修正（hText空でもS_NAMEを表示）
+        const displayName = f.properties.hText || f.properties.S_NAME || "地区名未設定";
+        const tooltipText = isAssigned 
+          ? `${f.properties.tanto}<br>${displayName}` 
+          : `[担当者なし]<br>${displayName}`;
+
+        geoLayer.bindTooltip(tooltipText, {direction: "top", className: "custom-tooltip"});
+
         geoLayer.eachLayer(layer => {
           layer.on('click', function() {
-            // 以前の選択を解除
             if (selectedFeature) selectedFeature.setStyle({weight: 1});
-            
             selectedFeature = layer;
             layer.setStyle({weight: 5, color: "#1976d2"});
-            
-            // 変更ボタン有効化
             document.getElementById("changeBtn").classList.remove("btn-disable");
           });
         });
-
-        // ツールチップ
-        const tooltipText = isAssigned 
-          ? `${f.properties.tanto}<br>${f.properties.hText}` 
-          : `[担当者なし]<br>${f.properties.hText}`;
-        geoLayer.bindTooltip(tooltipText, {direction: "top", className: "custom-tooltip"});
       });
     }
 
@@ -139,10 +124,9 @@
     async function updateTanto() {
       if (!selectedFeature) return;
       const props = selectedFeature.feature.properties;
-      const hText = props.hText;
+      const hText = props.hText || props.S_NAME || "";
       const newTanto = document.getElementById("newTantoInput").value.trim();
 
-      // GASへ送信（H列=地名テキスト をキーにして J列=担当者 を更新）
       fetch(gasUrl, {
         method: "POST",
         mode: "no-cors",
@@ -152,8 +136,6 @@
 
       alert("✅ 更新を送信しました。ページを再読み込みします。");
       document.getElementById("modal").style.display = "none";
-      
-      // ハードリロード（キャッシュ完全クリア）
       location.reload(true);
     }
 
