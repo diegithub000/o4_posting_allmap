@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>担当者メンテナンス</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    body{margin:0}#map{height:100vh}
+    .menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000;font-size:15px}
+    select, button{font-size:15px;padding:10px 14px;}
+    .modal{
+      display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:2000;
+      align-items:center;justify-content:center;
+    }
+    .modal-content{
+      background:white;padding:30px;border-radius:12px;width:380px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);
+    }
+    .modal-content input{
+      width:100%;padding:12px;margin:15px 0;font-size:16px;
+    }
+    .btn-disable{opacity:0.4;pointer-events:none;}
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="menu">
+    <div style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#455a64">👤 担当者メンテナンス</div>
+    
+    <button id="changeBtn" onclick="openChangeModal()" class="btn-disable" style="background:#455a64;color:white">担当者変更</button>
+    
+    <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 インデックスに戻る</button>
+    
+    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.0 - 担当者メンテナンス</div>
+  </div>
+
+  <!-- 担当者変更モーダル -->
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <h3>担当者を変更します</h3>
+      <p id="districtName" style="font-weight:bold;color:#d32f2f;margin:10px 0;"></p>
+      <p style="font-size:14px;color:#555;margin-bottom:8px;">姓名の間に空白を作らないでください<br>削除する場合は空欄にしてください</p>
+      <input id="newTantoInput" type="text" placeholder="新しい担当者名">
+      <div style="margin-top:20px">
+        <button onclick="cancelModal()" style="margin-right:10px;padding:10px 20px;background:#999;color:white;border:none;border-radius:6px;">キャンセル</button>
+        <button onclick="updateTanto()" style="padding:10px 20px;background:#2e7d32;color:white;border:none;border-radius:6px;">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let map, layerGroup, allFeatures = [], selectedFeature = null;
+    const gasUrl = "https://script.google.com/macros/s/AKfycbywRXBSFfYRae1MWS98e4MCZPZcJmElQD576Rg1eDOteg2xIoWSjeYiYPknsKBdc0dy9A/exec"; 
+
+    async function init() {
+      map = L.map('map').setView([34.69, 135.54], 14);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
+
+      // 4ku_town.geojson 全区読み込み（view.htmlと同一）
+      const baseRes = await fetch('4ku_town.geojson');
+      const baseJson = await baseRes.json();
+      allFeatures = baseJson.features;
+
+      // スプレッドシートから担当者・地名テキスト取得
+      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
+      const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
+      const dataMap = {};
+      parsed.slice(1).forEach(r => {
+        const key = r[6]?.trim(); // KEY_CODE
+        if (key) {
+          dataMap[key] = {
+            tanto: r[9]?.trim() || "",
+            hText: r[7]?.trim() || ""
+          };
+        }
+      });
+
+      allFeatures.forEach(f => {
+        const info = dataMap[f.properties.KEY_CODE] || {tanto: "", hText: ""};
+        f.properties.tanto = info.tanto;
+        f.properties.hText = info.hText;
+      });
+
+      renderMap(allFeatures);
+    }
+
+    function renderMap(features) {
+      if (layerGroup) map.removeLayer(layerGroup);
+      layerGroup = L.layerGroup().addTo(map);
+
+      features.forEach(f => {
+        const isAssigned = !!f.properties.tanto;
+        const color = isAssigned ? "#2e7d32" : "#ff4444";
+        const opacity = isAssigned ? 0.5 : 0.4;
+
+        const geoLayer = L.geoJSON(f, {
+          style: {fillColor: color, fillOpacity: opacity, color: "#333", weight: 1}
+        }).addTo(layerGroup);
+
+        // クリックで選択
+        geoLayer.eachLayer(layer => {
+          layer.on('click', function() {
+            // 以前の選択を解除
+            if (selectedFeature) selectedFeature.setStyle({weight: 1});
+            
+            selectedFeature = layer;
+            layer.setStyle({weight: 5, color: "#1976d2"});
+            
+            // 変更ボタン有効化
+            document.getElementById("changeBtn").classList.remove("btn-disable");
+          });
+        });
+
+        // ツールチップ
+        const tooltipText = isAssigned 
+          ? `${f.properties.tanto}<br>${f.properties.hText}` 
+          : `[担当者なし]<br>${f.properties.hText}`;
+        geoLayer.bindTooltip(tooltipText, {direction: "top", className: "custom-tooltip"});
+      });
+    }
+
+    function openChangeModal() {
+      if (!selectedFeature) return;
+      const props = selectedFeature.feature.properties;
+      document.getElementById("districtName").textContent = props.hText || props.S_NAME || "該当地区";
+      document.getElementById("newTantoInput").value = props.tanto || "";
+      document.getElementById("modal").style.display = "flex";
+    }
+
+    function cancelModal() {
+      document.getElementById("modal").style.display = "none";
+      selectedFeature = null;
+      document.getElementById("changeBtn").classList.add("btn-disable");
+    }
+
+    async function updateTanto() {
+      if (!selectedFeature) return;
+      const props = selectedFeature.feature.properties;
+      const hText = props.hText;
+      const newTanto = document.getElementById("newTantoInput").value.trim();
+
+      // GASへ送信（H列=地名テキスト をキーにして J列=担当者 を更新）
+      fetch(gasUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({hText: hText, newTanto: newTanto})
+      }).catch(() => {});
+
+      alert("✅ 更新を送信しました。ページを再読み込みします。");
+      document.getElementById("modal").style.display = "none";
+      
+      // ハードリロード（キャッシュ完全クリア）
+      location.reload(true);
+    }
+
+    function backToIndex() {
+      location.href = "index.html";
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
