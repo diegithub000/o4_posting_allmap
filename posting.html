@@ -6,27 +6,51 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}</style>
+  <style>
+    body{margin:0}#map{height:100vh}
+    .menu{
+      position:absolute;top:10px;left:10px;
+      background:white;padding:15px;border-radius:8px;
+      box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000;
+      font-size:15px; /* スマホで見やすいサイズ */
+    }
+    select, button{
+      font-size:15px; /* プルダウンとボタンを適度に大きく */
+      padding:10px 14px;
+    }
+  </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="menu">
-    <select id="tanto" onchange="filter()"><option value="">担当者を選択</option></select>
-    <label><input type="checkbox" id="showBase" onchange="filter()"> 標準地図ポリゴンも表示</label>
-    <button onclick="getMyLocation()" style="margin-left:10px;padding:8px 12px;font-size:14px">📍 現在地を表示</button>
+    <select id="tanto" onchange="filter()">
+      <option value="">担当者を選択</option>
+    </select>
+    <label style="margin-left:8px"><input type="checkbox" id="showBase" onchange="filter()"> 標準地図ポリゴンも表示</label>
+    
+    <button onclick="refreshLatest()" style="margin-left:8px;background:#d32f2f;color:white">🔄 最新更新</button>
+    <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 一つ上の階層に戻る</button>
+    <button onclick="getMyLocation()" style="margin-left:8px">📍 現在地</button>
+    
+    <select id="mapType" onchange="changeMapType()" style="margin-left:8px">
+      <option value="std" selected>標準地図</option>
+      <option value="seamless">航空写真</option>
+      <option value="pale">淡色地図</option>
+    </select>
+
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-　　<div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.000.1</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.6</div>
   </div>
 
   <script>
     let map, layerGroup, baseFeatures = [], customFeatures = [], currentTanto = "";
+    let locationMarker = null;  // ← ピン残り対策
+    let currentTileLayer = null;
     const gasUrl = "https://script.google.com/macros/s/AKfycbzm5tyIDmh-WMRgSV5r2Z6C3rmYdjOKmC-wG1okPw6wo0mrSmzqNuA8PP7y6sPXz98puA/exec";
 
     async function init() {
       map = L.map('map').setView([34.69, 135.54], 14);
-      // 精細航空写真（最大ズーム18まで安全）
-      L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom: 18, attribution: '国土地理院'}).addTo(map);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18, opacity:0.3}).addTo(map);
+      changeMapType();
 
       const baseJson = await (await fetch('4ku_town.geojson')).json();
       baseFeatures = baseJson.features.filter(f => f.properties.CITY === "118");
@@ -35,6 +59,7 @@
       try { customJson = await (await fetch('custom.geojson')).json(); } catch(e) {}
       customFeatures = customJson.features;
 
+      // ステータス読み込み
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -48,21 +73,7 @@
         if (statusMap[f.properties.KEY_CODE]) f.properties.status = statusMap[f.properties.KEY_CODE];
       });
 
-      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
-      const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
-      const dataMap = {};
-      parsed.slice(1).forEach(r => {
-        const code = r[6]?.trim();
-        if (code) dataMap[code] = r[9]?.trim() || "";
-      });
-
-      [...baseFeatures, ...customFeatures].forEach(f => {
-        if (!f.properties.KEY_CODE || !f.properties.KEY_CODE.startsWith("NEW_")) {
-          f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
-        }
-        f.properties.status = f.properties.status || "未完了";
-      });
-
+      // 担当者リスト
       const tantoSet = new Set([...baseFeatures, ...customFeatures].map(f => f.properties.tanto).filter(Boolean));
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
@@ -74,19 +85,56 @@
       filter();
     }
 
+    function changeMapType() {
+      const type = document.getElementById("mapType").value;
+      if (currentTileLayer) map.removeLayer(currentTileLayer);
+
+      if (type === "seamless") {
+        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom:18});
+      } else if (type === "pale") {
+        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {maxZoom:19});
+      } else {
+        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19});
+      }
+      currentTileLayer.addTo(map);
+    }
+
     function renderMap(features) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
+
+      const isSingle = !!currentTanto;  // 担当者選択中
+
       features.forEach(f => {
-        const color = f.properties.status === "完了" ? "#0066ff" : "#ff4444";
+        const isDone = f.properties.status === "完了";
+        let color = isDone ? "#0066ff" : "#ff4444";
+        let opacity = isDone ? 0.3 : 0.3;
+        let borderColor = isDone ? "#0066ff" : "#ff4444";
+        let weight = 3;
+
+        if (isSingle) {
+          // ★ 該当地域選択時は赤の太い線（塗りなし）
+          color = "#ff4444";
+          opacity = 0;
+          borderColor = "#ff4444";
+          weight = 5;
+        }
+
         L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: 0.3, color: "#000", weight: 3},
+          style: {fillColor: color, fillOpacity: opacity, color: borderColor, weight: weight},
           onEachFeature: (feature, layer) => {
             layer.on('click', async function() {
               const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
               feature.properties.status = newStatus;
-              this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444"});
-              fetch(gasUrl, {method:"POST", mode:"no-cors", headers:{"Content-Type":"application/json"}, body:JSON.stringify({keyCode:feature.properties.KEY_CODE, tanto:feature.properties.tanto, status:newStatus})}).catch(()=>{});
+              this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444", color: newStatus === "完了" ? "#0066ff" : "#ff4444"});
+
+              fetch(gasUrl, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({keyCode:feature.properties.KEY_CODE, tanto:feature.properties.tanto, status:newStatus})
+              }).catch(() => {});
+
               document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
             });
           }
@@ -97,24 +145,34 @@
     function filter() {
       currentTanto = document.getElementById("tanto").value;
       const showBase = document.getElementById("showBase").checked;
+
       let filtered = [];
-      if (currentTanto) filtered = customFeatures.filter(f => f.properties.tanto === currentTanto);
-      else if (showBase) filtered = baseFeatures;
+      if (currentTanto) {
+        filtered = customFeatures.filter(f => f.properties.tanto === currentTanto);
+      } else if (showBase) {
+        filtered = baseFeatures;
+      }
       renderMap(filtered);
     }
 
-    // 現在地取得（ユーザーの位置情報をマーカー表示）
+    function refreshLatest() {
+      location.reload(true);
+    }
+
     function getMyLocation() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          L.marker([lat, lng]).addTo(map).bindPopup("📍 現在地").openPopup();
-          map.flyTo([lat, lng], 18);
-        }, () => alert("位置情報の取得が拒否されました"));
-      } else {
-        alert("お使いのブラウザは位置情報取得に対応していません");
+          if (locationMarker) map.removeLayer(locationMarker);
+          locationMarker = L.marker([pos.coords.latitude, pos.coords.longitude])
+            .addTo(map)
+            .bindPopup("📍 現在地").openPopup();
+          map.flyTo([pos.coords.latitude, pos.coords.longitude], 18);
+        });
       }
+    }
+
+    function backToIndex() {
+      location.href = "index.html";
     }
 
     window.onload = init;
