@@ -6,7 +6,19 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <style>body{margin:0}#map{height:100vh}.menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000}</style>
+  <style>
+    body{margin:0}#map{height:100vh}
+    .menu{
+      position:absolute;top:10px;left:10px;
+      background:white;padding:15px;border-radius:8px;
+      box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000;
+      font-size:15px; /* スマホで見やすいサイズ */
+    }
+    select, button{
+      font-size:15px; /* プルダウンとボタンを適度に大きく */
+      padding:10px 14px;
+    }
+  </style>
 </head>
 <body>
   <div id="map"></div>
@@ -14,22 +26,23 @@
     <select id="townSelect" onchange="filter()">
       <option value="">全体表示</option>
     </select>
-    <button onclick="refreshLatest()" style="margin-left:8px;padding:8px 12px;background:#d32f2f;color:white">🔄 最新の状態に更新</button>
-    <button onclick="backToMenu()" style="margin-left:8px;padding:8px 12px;background:#555;color:white">メニューに戻る</button>
-    <button onclick="getMyLocation()" style="margin-left:8px;padding:8px 12px">📍 現在地</button>
+    <button onclick="refreshLatest()" style="margin-left:8px;background:#d32f2f;color:white">🔄 最新の状態に更新</button>
+    <button onclick="backToMenu()" style="margin-left:8px;background:#555;color:white">メニューに戻る</button>
+    <button onclick="getMyLocation()" style="margin-left:8px">📍 現在地</button>
     
-    <select id="mapType" onchange="changeMapType()" style="margin-left:8px;padding:8px 12px">
+    <select id="mapType" onchange="changeMapType()" style="margin-left:8px">
       <option value="std" selected>標準地図</option>
       <option value="seamless">航空写真</option>
       <option value="pale">淡色地図</option>
     </select>
 
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.5</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.6</div>
   </div>
 
   <script>
     let map, layerGroup, allFeatures = [], currentTown = "", statusMap = {}, currentTileLayer = null;
+    let locationMarker = null;  // ← ここを追加（ピン残り対策）
     const gasUrl = "https://script.google.com/macros/s/AKfycbzm5tyIDmh-WMRgSV5r2Z6C3rmYdjOKmC-wG1okPw6wo0mrSmzqNuA8PP7y6sPXz98puA/exec";
 
     async function init() {
@@ -63,7 +76,6 @@
 
       filter();
 
-      // ★ ズーム19到達時にOpenStreetMap自動切り替え（航空写真以外）
       map.on('zoomend', () => {
         if (map.getZoom() >= 19 && currentTileLayer && !currentTileLayer._url.includes("openstreetmap")) {
           if (currentTileLayer) map.removeLayer(currentTileLayer);
@@ -101,12 +113,15 @@
         let color = isDone ? "#0066ff" : "#ff4444";
         let opacity = isDone ? 0.6 : 0.2;
         let borderColor = isDone ? "#0066ff" : "#ff4444";
+        let weight = isCustom ? 3 : 2;
         let clickable = true;
 
         if (isSingle && !isCustom) {
-          color = "#0066ff";
+          // ★ ここを修正：赤の太い線に変更
+          color = "#ff4444";
           opacity = 0;
-          borderColor = "#0066ff";
+          borderColor = "#ff4444";
+          weight = 5;
           clickable = false;
         } else if (!isSingle) {
           const townColors = {"あかしあ台一丁目":"#ff4444","桐ケ丘":"#4444ff","自由ケ丘":"#44ff44"};
@@ -117,7 +132,7 @@
         }
 
         const geoLayer = L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: opacity, color: borderColor, weight: isCustom ? 3 : 2}
+          style: {fillColor: color, fillOpacity: opacity, color: borderColor, weight: weight}
         }).addTo(layerGroup);
 
         bounds.extend(geoLayer.getBounds());
@@ -179,25 +194,22 @@
       }
     }
 
-	// ★ 最新の状態に更新（ハードリロード）
     function refreshLatest() {
-      location.reload(true);   // キャッシュを無視して完全リロード
+      location.reload(true);
     }
 
     function getMyLocation() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
-          L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map)
+          // ★ 前のピンを削除してから新しいピンを追加
+          if (locationMarker) map.removeLayer(locationMarker);
+          
+          locationMarker = L.marker([pos.coords.latitude, pos.coords.longitude])
+            .addTo(map)
             .bindPopup("📍 現在地").openPopup();
           map.flyTo([pos.coords.latitude, pos.coords.longitude], 18);
         });
       }
-    }
-
-    function backToAll() {
-      document.getElementById("townSelect").value = "";
-      currentTown = "";
-      filter();
     }
 
     function backToMenu() {
