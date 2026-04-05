@@ -15,9 +15,12 @@
     }
     select, button{font-size:15px;padding:10px 14px;}
     .custom-tooltip { 
-      white-space: pre-line; 
-      font-size:13px; 
+      white-space: normal !important;
+      max-width: 220px !important;
+      text-align: left;
       line-height: 1.4;
+      padding: 4px 8px;
+      writing-mode: horizontal-tb !important;
     }
   </style>
 </head>
@@ -96,7 +99,6 @@
       layerGroup = L.layerGroup().addTo(map);
 
       features.forEach(f => {
-        // 塗りつぶし色・透明度を指定
         const isAssigned = !!f.properties.tanto;
         const color = isAssigned ? "#2e7d32" : "#ff4444";
         const opacity = isAssigned ? 0.5 : 0.4;
@@ -105,22 +107,17 @@
           style: {fillColor: color, fillOpacity: opacity, color: "#333", weight: 1}
         }).addTo(layerGroup);
 
-        // マウスオーバー時の2行表示
-        let tooltipText = "";
-        if (isAssigned) {
-          tooltipText = `${f.properties.tanto}\n${f.properties.hText}`;
-        } else {
-          tooltipText = `[担当者なし]\n${f.properties.hText}`;
-        }
+        // 2行表示（<br>で強制改行）
+        let tooltipText = isAssigned 
+          ? `${f.properties.tanto}<br>${f.properties.hText}` 
+          : `[担当者なし]<br>${f.properties.hText}`;
 
-        if (tooltipText.trim()) {
-          geoLayer.bindTooltip(tooltipText, {
-            permanent: false,
-            direction: "top",
-            className: "custom-tooltip",
-            offset: [0, -10]
-          });
-        }
+        geoLayer.bindTooltip(tooltipText, {
+          permanent: false,
+          direction: "top",
+          className: "custom-tooltip",
+          offset: [0, -10]
+        });
       });
     }
 
