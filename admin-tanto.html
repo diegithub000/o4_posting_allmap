@@ -9,14 +9,11 @@
   <style>
     body{margin:0}#map{height:100vh}
     .menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000;font-size:15px}
-    select, button{font-size:15px;padding:10px 14px;}
     .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:2000;align-items:center;justify-content:center}
     .modal-content{background:white;padding:30px;border-radius:12px;width:380px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
     .modal-content input{width:100%;padding:12px;margin:15px 0;font-size:16px}
     .btn-disable{opacity:0.4;pointer-events:none}
-    
-    /* デバッグ情報表示用 */
-    .debug{position:absolute;bottom:10px;left:10px;background:#000;color:#0f0;padding:10px;font-size:12px;max-width:420px;z-index:1000;white-space:pre-wrap;opacity:0.95;border-radius:4px}
+    .debug{position:absolute;bottom:10px;left:10px;background:#000;color:#0f0;padding:8px;font-size:11px;max-width:400px;z-index:1000;white-space:pre-wrap;opacity:0.9;border-radius:4px}
   </style>
 </head>
 <body>
@@ -26,10 +23,10 @@
     <div style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#455a64">👤 担当者メンテナンス</div>
     <button id="changeBtn" onclick="openChangeModal()" class="btn-disable" style="background:#455a64;color:white">担当者変更</button>
     <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 インデックスに戻る</button>
-    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.6 - デバッグ表示版</div>
+    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.6 - 安全修正版</div>
   </div>
 
-  <!-- デバッグ情報（画面下に常時表示） -->
+  <!-- デバッグ情報（画面下に最小限表示） -->
   <div id="debugPanel" class="debug"></div>
 
   <div id="modal" class="modal">
@@ -58,16 +55,16 @@
       const baseJson = await baseRes.json();
       allFeatures = baseJson.features;
 
+      // スプシ取得（最小限のキャッシュ対策のみ）
       const csvUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1&t=" + Date.now();
-      const csvText = await (await fetch(csvUrl, { cache: 'no-store' })).text();
+      const csvText = await (await fetch(csvUrl)).text();
 
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
 
       parsed.slice(1).forEach(r => {
-        let key = r[6];
-        if (key !== undefined && key !== null) {
-          key = key.toString().trim();
+        const key = r[6]?.toString().trim();
+        if (key) {
           dataMap[key] = {
             tanto: (r[9] || "").toString().trim(),
             hText: (r[7] || "").toString().trim()
@@ -75,25 +72,18 @@
         }
       });
 
-      // デバッグ用：網島町がdataMapに存在するか確認
-      const debugInfo = [];
-      debugInfo.push(`dataMap 登録件数: ${Object.keys(dataMap).length}`);
-      debugInfo.push(`網島町 KEY_CODE "2710202000" → ${dataMap["2710202000"] ? "登録済み: " + dataMap["2710202000"].tanto : "未登録"}`);
+      // デバッグ情報
+      const debug = [];
+      debug.push(`dataMap登録件数: ${Object.keys(dataMap).length}`);
+      debug.push(`網島町(2710202000): ${dataMap["2710202000"] ? dataMap["2710202000"].tanto : "未登録"}`);
+      document.getElementById("debugPanel").textContent = debug.join(" | ");
 
       allFeatures.forEach(f => {
         const key = f.properties.KEY_CODE.toString().trim();
         const info = dataMap[key] || {tanto: "", hText: ""};
         f.properties.tanto = info.tanto;
         f.properties.hText = info.hText;
-
-        // 網島町だけ特別にデバッグ
-        if (key === "2710202000") {
-          debugInfo.push(`網島町ポリゴン処理後 → tanto: "${info.tanto}"`);
-        }
       });
-
-      // 画面下にデバッグ情報を表示
-      document.getElementById("debugPanel").textContent = debugInfo.join("\n");
 
       renderMap(allFeatures);
     }
@@ -129,3 +119,43 @@
       });
     }
 
+    function openChangeModal() {
+      if (!selectedFeature) return;
+      const props = selectedFeature.feature.properties;
+      document.getElementById("districtName").textContent = props.hText || props.S_NAME || "該当地区";
+      document.getElementById("newTantoInput").value = props.tanto || "";
+      document.getElementById("modal").style.display = "flex";
+    }
+
+    function cancelModal() {
+      document.getElementById("modal").style.display = "none";
+      selectedFeature = null;
+      document.getElementById("changeBtn").classList.add("btn-disable");
+    }
+
+    async function updateTanto() {
+      if (!selectedFeature) return;
+      const props = selectedFeature.feature.properties;
+      const hText = props.hText || props.S_NAME || "";
+      const newTanto = document.getElementById("newTantoInput").value.trim();
+
+      fetch(gasUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({hText: hText, newTanto: newTanto})
+      }).catch(() => {});
+
+      alert("✅ 更新を送信しました。ページを再読み込みします。");
+      document.getElementById("modal").style.display = "none";
+      setTimeout(() => { location.reload(true); }, 600);
+    }
+
+    function backToIndex() {
+      location.href = "index.html";
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
