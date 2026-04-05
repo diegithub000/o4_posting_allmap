@@ -52,15 +52,11 @@
       const baseJson = await baseRes.json();
       allFeatures = baseJson.features;
 
-      // ★ ここを大幅強化：Googleスプレッドシートのキャッシュを徹底的に無効化
+      // ★ スプシ読み込みを再検査・強化（キャッシュ完全無効化）
       const csvUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1&t=" + Date.now();
-      const csvText = await (await fetch(csvUrl, {
+      const csvText = await (await fetch(csvUrl, { 
         cache: 'no-store',
-        headers: {
-          'Pragma': 'no-cache',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Expires': '0'
-        }
+        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
       })).text();
 
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
@@ -75,8 +71,6 @@
           };
         }
       });
-
-      console.log("✅ dataMap作成完了 件数:", Object.keys(dataMap).length); // デバッグ用
 
       allFeatures.forEach(f => {
         const info = dataMap[f.properties.KEY_CODE] || {tanto: "", hText: ""};
@@ -145,12 +139,13 @@
         body: JSON.stringify({hText: hText, newTanto: newTanto})
       }).catch(() => {});
 
-      alert("✅ 更新を送信しました。少し待ってから再読み込みします。");
+      alert("✅ 更新を送信しました。ページを再読み込みします。");
       document.getElementById("modal").style.display = "none";
 
+      // 担当者変更後は必ずスプシから最新データを再ロード
       setTimeout(() => {
         location.reload(true);
-      }, 800);
+      }, 600);
     }
 
     function backToIndex() {
