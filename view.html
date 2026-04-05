@@ -14,6 +14,7 @@
       font-size:15px;
     }
     select, button{font-size:15px;padding:10px 14px;}
+    .custom-tooltip { white-space: pre-line; font-size:13px; }
   </style>
 </head>
 <body>
@@ -43,17 +44,24 @@
       const baseJson = await baseRes.json();
       allFeatures = baseJson.features.filter(f => f.properties.CITY === "118");
 
-      // スプレッドシートから担当者情報を取得
+      // スプレッドシートから担当者（J列）とH列の文字列を読み込み
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
       parsed.slice(1).forEach(r => {
-        const code = r[6]?.trim();
-        if (code) dataMap[code] = r[9]?.trim() || "";
+        const code = r[6]?.trim();        // G列 = KEY_CODE
+        if (code) {
+          dataMap[code] = {
+            tanto: r[9]?.trim() || "",    // J列 = 担当者名
+            hText: r[7]?.trim() || ""     // H列の文字列
+          };
+        }
       });
 
       allFeatures.forEach(f => {
-        f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
+        const info = dataMap[f.properties.KEY_CODE] || {tanto: "", hText: ""};
+        f.properties.tanto = info.tanto;
+        f.properties.hText = info.hText;
       });
 
       // 担当者セレクトボックス
@@ -77,7 +85,6 @@
       } else if (type === "pale") {
         currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {maxZoom:19});
       } else {
-        // 標準地図 → OpenStreetMap（ズーム19対応）
         currentTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
       }
       currentTileLayer.addTo(map);
@@ -88,14 +95,21 @@
       layerGroup = L.layerGroup().addTo(map);
 
       features.forEach(f => {
-        const color = f.properties.tanto ? "#2e7d32" : "#ff0505";
+        const color = f.properties.tanto ? "#2e7d32" : "#666666";
         const geoLayer = L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: 0.6, color: "#333", weight: 1}
+          style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1}
         }).addTo(layerGroup);
 
-        // ★ マウスオーバーで担当者名を表示
+        // マウスオーバー時の表示内容を作成
+        let tooltipText = "";
         if (f.properties.tanto) {
-          geoLayer.bindTooltip(f.properties.tanto, {
+          tooltipText = `${f.properties.tanto}\n${f.properties.hText}`;
+        } else {
+          tooltipText = `[担当者なし]\n${f.properties.hText}`;
+        }
+
+        if (tooltipText.trim()) {
+          geoLayer.bindTooltip(tooltipText, {
             permanent: false,
             direction: "top",
             className: "custom-tooltip",
