@@ -16,30 +16,30 @@
       display:flex; gap:8px; align-items:center; flex-wrap:wrap;
       font-size:14px;
     }
-    select{font-size:14px;padding:6px 10px;}
+    select{font-size:14px;padding:8px 12px;}
   </style>
 </head>
 <body>
   <div id="map"></div>
 
   <div class="menu">
-    <!-- 1. 全体表示 -->
+    <!-- 担当者選択 -->
+    <select id="tantoSelect" style="margin-right:8px;">
+      <option value="">担当者を選択してください</option>
+    </select>
+
+    <!-- 全体表示 -->
     <button onclick="fitAll()" style="padding:8px 12px">全体表示</button>
     
-    <!-- 2. インデックスに戻る -->
+    <!-- インデックスに戻る -->
     <button onclick="backToIndex()" style="padding:8px 12px;background:#555;color:white">🏠 インデックスに戻る</button>
     
-    <!-- 3. GeoJSONを選択 -->
+    <!-- GeoJSONを選択 -->
     <input type="file" id="geoFile" accept=".geojson" style="display:none">
     <button onclick="document.getElementById('geoFile').click()" style="padding:8px 12px">📂 GeoJSONを選択</button>
     
-    <!-- 4. 現在選択ファイル表示 -->
+    <!-- 現在選択ファイル表示 -->
     <span id="currentFile" style="font-size:13px;color:#555;min-width:220px">📄 4ku_custom.geojson</span>
-    
-    <!-- ★ 新規追加：担当者プルダウン -->
-    <select id="tanto" style="margin-left:12px;">
-      <option value="">担当者を選択（必須）</option>
-    </select>
     
     <div style="font-size:10px;color:#999;margin-left:10px">Build 0.000.8</div>
   </div>
@@ -52,52 +52,52 @@
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
-    let currentTanto = "";           // 現在選択中の担当者
-    let drawControl = null;          // 後で有効/無効を切り替えるため
+    let currentTanto = "";        // 現在選択中の担当者
+    let drawControl = null;
 
     // デフォルト表示ファイル名
     document.getElementById('currentFile').textContent = '📄 4ku_custom.geojson';
 
-    // スプレッドシートから担当者リストを読み込み（シート1のJ列）
+    // 担当者リスト取得（シート1のJ列）
     async function loadTantoList() {
-      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
-      const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
-      const tantoSet = new Set();
-      parsed.slice(1).forEach(r => {
-        const tanto = r[9]?.trim();
-        if (tanto) tantoSet.add(tanto);
-      });
+      try {
+        const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
+        const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
+        const tantoSet = new Set();
 
-      const select = document.getElementById("tanto");
-      tantoSet.forEach(name => {
-        const opt = document.createElement("option");
-        opt.value = name; opt.textContent = name;
-        select.appendChild(opt);
-      });
+        parsed.slice(1).forEach(r => {
+          const tanto = r[9]?.trim();   // J列
+          if (tanto) tantoSet.add(tanto);
+        });
 
-      // 担当者選択時の処理
-      select.onchange = () => {
-        currentTanto = select.value;
-        toggleEditMode();
-      };
+        const select = document.getElementById("tantoSelect");
+        tantoSet.forEach(name => {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          select.appendChild(opt);
+        });
+      } catch(e) {
+        console.error("担当者リスト取得エラー", e);
+      }
     }
 
-    // 編集モードのON/OFF（担当者未選択時は描画ツール無効）
-    function toggleEditMode() {
+    // 担当者選択時の処理
+    document.getElementById("tantoSelect").addEventListener("change", function() {
+      currentTanto = this.value;
+      
       if (drawControl) map.removeControl(drawControl);
-
+      
       if (currentTanto) {
-        // 担当者選択済み → 編集可能
+        // 担当者選択済み → 描画有効
         drawControl = new L.Control.Draw({
           edit: { featureGroup: drawnItems },
           draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false }
         });
         map.addControl(drawControl);
-      } else {
-        // 未選択 → 編集不可
-        drawControl = null;
       }
-    }
+      // 未選択時は描画コントロールを非表示（改変不可）
+    });
 
     // ファイル選択
     document.getElementById('geoFile').addEventListener('change', function(e) {
@@ -132,10 +132,10 @@
       })
       .catch(() => {});
 
-    // ポリゴン追加時 → 選択中の担当者を自動入力
+    // 新規ポリゴン追加時 → 選択中の担当者を自動設定
     map.on('draw:created', e => {
       if (!currentTanto) {
-        alert("担当者を選択してからポリゴンを追加してください");
+        alert("先に担当者を選択してください");
         return;
       }
 
@@ -145,7 +145,7 @@
         properties: {
           CITY: "118",
           KEY_CODE: "NEW_" + Date.now(),
-          tanto: currentTanto,           // ★ 自動入力
+          tanto: currentTanto,        // ← 自動設定
           status: "未完了",
           S_NAME: "手動追加"
         }
@@ -156,17 +156,17 @@
     // 名前を付けて保存
     const saveBtn = document.createElement('button');
     saveBtn.innerHTML = '✅ 名前を付けて保存';
-    saveBtn.style.position = 'absolute';
-    saveBtn.style.bottom = '20px';
-    saveBtn.style.left = '20px';
-    saveBtn.style.zIndex = 1000;
+    saveBtn.style.position='absolute'; 
+    saveBtn.style.bottom='20px'; 
+    saveBtn.style.left='20px'; 
+    saveBtn.style.zIndex=1000;
     saveBtn.onclick = () => {
       let fileName = prompt("保存するファイル名を入力してください", "4ku_custom.geojson");
       if (!fileName) return;
       if (!fileName.endsWith('.geojson')) fileName += '.geojson';
 
       const data = drawnItems.toGeoJSON();
-      const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = fileName;
@@ -184,8 +184,9 @@
       location.href = "index.html";
     }
 
+    // 初期化
     window.onload = async () => {
-      await loadTantoList();   // 担当者リスト読み込み
+      await loadTantoList();   // 担当者リスト取得
       setTimeout(fitAll, 800);
     };
   </script>
