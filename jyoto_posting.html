@@ -28,13 +28,12 @@
     <button onclick="getMyLocation()" style="margin-left:8px">📍 現在地</button>
 
     <select id="mapType" onchange="changeMapType()" style="margin-left:8px">
-      <option value="std" selected>標準地図</option>
+      <option value="osm" selected>標準地図（OSM）</option>
       <option value="seamless">航空写真</option>
-      <option value="pale">淡色地図</option>
     </select>
 
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.9</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.002.0</div>
   </div>
 
   <script>
@@ -44,13 +43,12 @@
 
     async function init() {
       map = L.map('map').setView([34.69, 135.54], 14);
-      changeMapType();
+      changeMapType();   // デフォルトでOSMを表示
 
       const baseRes = await fetch('4ku_town.geojson');
       const baseJson = await baseRes.json();
       baseFeatures = baseJson.features.filter(f => f.properties.CITY === "118");
 
-      // ★ ここを4ku_custom.geojsonに固定
       let customJson = {features:[]};
       try {
         customJson = await (await fetch('4ku_custom.geojson?t=' + Date.now())).json();
@@ -86,10 +84,9 @@
 
       if (type === "seamless") {
         currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {maxZoom:18});
-      } else if (type === "pale") {
-        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {maxZoom:19});
       } else {
-        currentTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19});
+        // 標準地図はOpenStreetMap（ズーム19対応）
+        currentTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
       }
       currentTileLayer.addTo(map);
     }
