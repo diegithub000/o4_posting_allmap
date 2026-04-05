@@ -9,11 +9,11 @@
   <style>
     body{margin:0}#map{height:100vh}
     .menu{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000;font-size:15px}
+    select, button{font-size:15px;padding:10px 14px;}
     .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:2000;align-items:center;justify-content:center}
     .modal-content{background:white;padding:30px;border-radius:12px;width:380px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
     .modal-content input{width:100%;padding:12px;margin:15px 0;font-size:16px}
     .btn-disable{opacity:0.4;pointer-events:none}
-    .debug{position:absolute;bottom:10px;left:10px;background:#000;color:#0f0;padding:8px;font-size:11px;max-width:520px;z-index:1000;white-space:pre-wrap;opacity:0.95;border-radius:4px}
   </style>
 </head>
 <body>
@@ -23,10 +23,8 @@
     <div style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#455a64">👤 担当者メンテナンス</div>
     <button id="changeBtn" onclick="openChangeModal()" class="btn-disable" style="background:#455a64;color:white">担当者変更</button>
     <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 インデックスに戻る</button>
-    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.10 - 最終修正版</div>
+    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.11 - 自動マッチング版</div>
   </div>
-
-  <div id="debugPanel" class="debug"></div>
 
   <div id="modal" class="modal">
     <div class="modal-content">
@@ -59,48 +57,41 @@
 
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
-      const debugLines = [`dataMap登録件数: ${parsed.length - 1}行`];
 
-      parsed.slice(1).forEach((r, idx) => {
-        let rawKey = r[6];
-        let keyStr = rawKey != null ? rawKey.toString().trim() : "";
-        let keyNum = rawKey != null ? Number(rawKey) : NaN;
-
-        if (keyStr) {
-          const info = { tanto: (r[9] || "").toString().trim(), hText: (r[7] || "").toString().trim() };
-          dataMap[keyStr] = info;
-          if (!isNaN(keyNum)) dataMap[keyNum] = info;
-        }
-
-        if (keyStr === "2710202000" || keyNum === 2710202000 || (r[7] && r[7].toString().includes("網島町"))) {
-          debugLines.push(`網島町行(${idx+2}) rawKey=${rawKey} (型:${typeof rawKey}) → keyStr="${keyStr}"`);
+      parsed.slice(1).forEach(r => {
+        const key = r[6]?.toString().trim();
+        if (key) {
+          dataMap[key] = {
+            tanto: (r[9] || "").toString().trim(),
+            hText: (r[7] || "").toString().trim()
+          };
         }
       });
 
-      debugLines.push(`最終 dataMap件数: ${Object.keys(dataMap).length}`);
-      debugLines.push(`網島町(2710202000) dataMap状態: ${dataMap["2710202000"] ? dataMap["2710202000"].tanto : "未登録"}`);
-
-      // geojson側も確認
-      let foundInGeo = false;
       allFeatures.forEach(f => {
-        const geoKey = f.properties.KEY_CODE;
-        const geoKeyStr = geoKey != null ? geoKey.toString().trim() : "";
-        if (geoKeyStr === "2710202000" || Number(geoKey) === 2710202000) {
-          debugLines.push(`geojson側 網島町発見 → KEY_CODE=${geoKey} (型:${typeof geoKey})`);
-          foundInGeo = true;
+        const props = f.properties;
+
+        // 自動マッチング（複数の候補で照合）
+        let matchedInfo = {tanto: "", hText: ""};
+
+        const candidates = [
+          props.KEY_CODE?.toString().trim(),                    // 1. 通常のKEY_CODE
+          props.KEYCODE1 ? "27" + props.KEYCODE1.toString().trim() : null,  // 2. PREF + KEYCODE1
+          props.KEYCODE1 ? props.KEYCODE1.toString().trim() : null,         // 3. KEYCODE1単体
+          (props.PREF && props.CITY && props.KIHON1 && props.KIHON2) 
+            ? props.PREF.toString().trim() + props.CITY.toString().trim() + props.KIHON1.toString().trim().slice(-3) + props.KIHON2.toString().trim()
+            : null
+        ];
+
+        for (const cand of candidates) {
+          if (cand && dataMap[cand]) {
+            matchedInfo = dataMap[cand];
+            break;
+          }
         }
-      });
-      if (!foundInGeo) debugLines.push(`geojson側に2710202000が見つかりませんでした`);
 
-      document.getElementById("debugPanel").textContent = debugLines.join("\n");
-
-      // マッチングを両方向で強化
-      allFeatures.forEach(f => {
-        const keyStr = f.properties.KEY_CODE != null ? f.properties.KEY_CODE.toString().trim() : "";
-        const keyNum = Number(f.properties.KEY_CODE);
-        const info = dataMap[keyStr] || dataMap[keyNum] || {tanto: "", hText: ""};
-        f.properties.tanto = info.tanto;
-        f.properties.hText = info.hText;
+        f.properties.tanto = matchedInfo.tanto;
+        f.properties.hText = matchedInfo.hText;
       });
 
       renderMap(allFeatures);
