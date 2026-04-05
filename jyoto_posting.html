@@ -11,7 +11,7 @@
     .menu{
       position:absolute;top:10px;left:10px;background:white;padding:15px;
       border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:1000;
-      font-size:15px; /* スマホで見やすいサイズ */
+      font-size:15px;
     }
     select, button{font-size:15px;padding:10px 14px;}
   </style>
@@ -22,7 +22,6 @@
     <select id="tanto" onchange="filter()">
       <option value="">担当者を選択</option>
     </select>
-    <label><input type="checkbox" id="showBase" onchange="filter()"> 標準地図も表示</label>
     
     <button onclick="refreshLatest()" style="margin-left:8px;background:#d32f2f;color:white">🔄 最新更新</button>
     <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 一つ上に戻る</button>
@@ -35,23 +34,22 @@
     </select>
 
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.6</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.7</div>
   </div>
 
   <script>
     let map, layerGroup, baseFeatures = [], customFeatures = [], currentTanto = "", locationMarker = null;
+    let currentTileLayer = null;
     const gasUrl = "https://script.google.com/macros/s/AKfycbzm5tyIDmh-WMRgSV5r2Z6C3rmYdjOKmC-wG1okPw6wo0mrSmzqNuA8PP7y6sPXz98puA/exec";
 
     async function init() {
       map = L.map('map').setView([34.69, 135.54], 14);
       changeMapType();
 
-      // baseデータ読み込み
       const baseRes = await fetch('4ku_town.geojson');
       const baseJson = await baseRes.json();
       baseFeatures = baseJson.features.filter(f => f.properties.CITY === "118");
 
-      // customデータ読み込み
       let customJson = {features:[]};
       try {
         customJson = await (await fetch('custom.geojson?t=' + Date.now())).json();
@@ -59,7 +57,6 @@
 
       customFeatures = customJson.features;
 
-      // スプレッドシートから担当者・ステータスを全読み込み
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -74,7 +71,6 @@
         else f.properties.status = "未完了";
       });
 
-      // 担当者リスト作成（シート1から全担当者取得）
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
@@ -89,7 +85,6 @@
         }
       });
 
-      // セレクトボックスに担当者追加
       const tantoSet = new Set([...baseFeatures, ...customFeatures].map(f => f.properties.tanto).filter(Boolean));
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
@@ -100,7 +95,6 @@
 
       filter();
 
-      // ズーム19で自動OSM切り替え
       map.on('zoomend', () => {
         if (map.getZoom() >= 19 && currentTileLayer && !currentTileLayer._url.includes("openstreetmap")) {
           if (currentTileLayer) map.removeLayer(currentTileLayer);
@@ -110,7 +104,6 @@
       });
     }
 
-    let currentTileLayer = null;
     function changeMapType() {
       const type = document.getElementById("mapType").value;
       if (currentTileLayer) map.removeLayer(currentTileLayer);
@@ -129,6 +122,8 @@
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
 
+      let bounds = L.latLngBounds([]);
+
       features.forEach(f => {
         const isCustom = f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_");
         const isDone = f.properties.status === "完了";
@@ -137,7 +132,6 @@
         let borderColor = isDone ? "#0066ff" : "#ff4444";
         let weight = isCustom ? 3 : 2;
 
-        // 担当者選択時（単一地域表示）の境界線を赤の太線に変更
         if (currentTanto && !isCustom) {
           color = "#ff4444";
           opacity = 0;
@@ -145,37 +139,27 @@
           weight = 5;
         }
 
-        L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: opacity, color: borderColor, weight: weight},
-          onEachFeature: (feature, layer) => {
-            layer.on('click', async function() {
-              const newStatus = feature.properties.status === "完了" ? "未完了" : "完了";
-              feature.properties.status = newStatus;
-              this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444", color: newStatus === "完了" ? "#0066ff" : "#ff4444"});
-
-              fetch(gasUrl, {
-                method: "POST", mode: "no-cors",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({keyCode: feature.properties.KEY_CODE, tanto: feature.properties.tanto, status: newStatus})
-              }).catch(() => {});
-
-              document.getElementById("status").innerHTML = `✅ ${feature.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
-            });
-          }
+        const geoLayer = L.geoJSON(f, {
+          style: {fillColor: color, fillOpacity: opacity, color: borderColor, weight: weight}
         }).addTo(layerGroup);
+
+        bounds.extend(geoLayer.getBounds());
       });
+
+      if (bounds.isValid()) {
+        if (currentTanto) {
+          map.fitBounds(bounds, {padding: [60, 60]});  // 担当者選択時はしっかりフォーカス
+        } else {
+          map.fitBounds(bounds, {padding: [30, 30]});
+        }
+      }
     }
 
     function filter() {
       currentTanto = document.getElementById("tanto").value;
-      const showBase = document.getElementById("showBase").checked;
-      let filtered = [];
-
-      if (currentTanto) {
-        filtered = customFeatures.filter(f => f.properties.tanto === currentTanto);
-      } else if (showBase) {
-        filtered = baseFeatures;
-      }
+      let filtered = currentTanto 
+        ? customFeatures.filter(f => f.properties.tanto === currentTanto)
+        : baseFeatures;   // チェックボックス削除に伴い、担当者未選択時はbaseFeaturesを表示
 
       renderMap(filtered);
     }

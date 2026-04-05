@@ -8,22 +8,31 @@
     .container{text-align:center;background:white;padding:40px;border-radius:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1)}
     h1{color:#333;margin-bottom:30px}
     .btn{display:block;width:320px;margin:15px auto;padding:18px;font-size:18px;border-radius:8px;text-decoration:none;color:white}
-    .emergency{background:#d32f2f}.view{background:#2e7d32}.work{background:#1976d2}.admin{background:#455a64}
+    .emergency{background:#d32f2f}
+    .view{background:#2e7d32}
+    .work1{background:#ffcc99}   /* 薄いオレンジ */
+    .work2{background:#ffbb77}
+    .work3{background:#ffaa55}
+    .work4{background:#ff8833}   /* 濃いオレンジ */
+    .admin{background:#455a64}
+    hr{margin:25px 40px;border:1px solid #ddd;}
   </style>
 </head>
 <body>
   <div class="container">
     <h1>4支部ポスティング支援ツール</h1>
     <a href="view.html" class="btn view">📍 エリア確認モード</a>
-    <a href="jyoto_posting.html" class="btn work">🛠 城東区ポスティング実行モード</a>
-    <a href="kita_posting.html" class="btn work">🛠 北　区ポスティング実行モード</a>
-    <a href="miyakojima_posting.html" class="btn work">🛠 都島区ポスティング実行モード</a>
-    <a href="fukushima_posting.html" class="btn work">🛠 福島区ポスティング実行モード</a>
+    
+    <a href="jyoto_posting.html" class="btn work1">🛠 城東区ポスティング実行モード</a>
+    <a href="kita_posting.html" class="btn work2">🛠 北　区ポスティング実行モード</a>
+    <a href="miyakojima_posting.html" class="btn work3">🛠 都島区ポスティング実行モード</a>
+    <a href="fukushima_posting.html" class="btn work4">🛠 福島区ポスティング実行モード</a>
+    
+    <hr>
     <a href="admin-draw.html" class="btn admin">🔧 管理画面（ポリゴン追加）</a>
     <a href="support.html" class="btn emergency">🚨 緊急:15支部応援</a>
 
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build β0.001.3</div>
-
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build β0.001.4</div>
   </div>
 </body>
 </html>
