@@ -23,7 +23,7 @@
     <div style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#455a64">👤 担当者メンテナンス</div>
     <button id="changeBtn" onclick="openChangeModal()" class="btn-disable" style="background:#455a64;color:white">担当者変更</button>
     <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 インデックスに戻る</button>
-    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.1 - 担当者メンテナンス</div>
+    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.2 - 担当者メンテナンス</div>
   </div>
 
   <div id="modal" class="modal">
@@ -52,12 +52,15 @@
       const baseJson = await baseRes.json();
       allFeatures = baseJson.features;
 
-      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
+      // ★ CSV取得時にタイムスタンプを付けてキャッシュを無効化（これが一番効果的）
+      const csvUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1&t=" + Date.now();
+      const csvText = await (await fetch(csvUrl)).text();
+
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
 
       parsed.slice(1).forEach(r => {
-        const key = r[6]?.toString().trim();   // 厳密にtrim
+        const key = r[6]?.toString().trim();
         if (key) {
           dataMap[key] = {
             tanto: r[9]?.trim() || "",
@@ -88,7 +91,6 @@
           style: {fillColor: color, fillOpacity: opacity, color: "#333", weight: 1}
         }).addTo(layerGroup);
 
-        // ツールチップ修正（hText空でもS_NAMEを表示）
         const displayName = f.properties.hText || f.properties.S_NAME || "地区名未設定";
         const tooltipText = isAssigned 
           ? `${f.properties.tanto}<br>${displayName}` 
@@ -136,7 +138,7 @@
 
       alert("✅ 更新を送信しました。ページを再読み込みします。");
       document.getElementById("modal").style.display = "none";
-      location.reload(true);
+      location.reload(true);   // ハードリロードで確実に最新状態を表示
     }
 
     function backToIndex() {
