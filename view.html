@@ -14,13 +14,17 @@
       font-size:15px;
     }
     select, button{font-size:15px;padding:10px 14px;}
+    
+    /* tooltipを強制的に横書き2行にする */
+    .leaflet-tooltip,
     .custom-tooltip { 
-      white-space: normal !important;
-      max-width: 220px !important;
+      white-space: pre-line !important;
+      max-width: 260px !important;
       text-align: left;
-      line-height: 1.4;
-      padding: 4px 8px;
+      line-height: 1.45;
+      padding: 6px 10px;
       writing-mode: horizontal-tb !important;
+      word-break: keep-all;
     }
   </style>
 </head>
@@ -38,8 +42,7 @@
       <option value="pale">淡色地図</option>
     </select>
 
-    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.000.6</div>
-
+    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.002.1</div>
   </div>
 
   <script>
@@ -119,7 +122,8 @@
           permanent: false,
           direction: "top",
           className: "custom-tooltip",
-          offset: [0, -10]
+          offset: [0, -10],
+          html: true   // ← これが重要！
         });
       });
     }
