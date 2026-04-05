@@ -16,6 +16,7 @@
       display:flex; gap:8px; align-items:center; flex-wrap:wrap;
       font-size:14px;
     }
+    select{font-size:14px;padding:6px 10px;}
   </style>
 </head>
 <body>
@@ -35,7 +36,12 @@
     <!-- 4. 現在選択ファイル表示 -->
     <span id="currentFile" style="font-size:13px;color:#555;min-width:220px">📄 4ku_custom.geojson</span>
     
-    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.000.7</div>
+    <!-- ★ 新規追加：担当者プルダウン -->
+    <select id="tanto" style="margin-left:12px;">
+      <option value="">担当者を選択（必須）</option>
+    </select>
+    
+    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.000.8</div>
   </div>
 
   <script>
@@ -46,8 +52,52 @@
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
+    let currentTanto = "";           // 現在選択中の担当者
+    let drawControl = null;          // 後で有効/無効を切り替えるため
+
     // デフォルト表示ファイル名
     document.getElementById('currentFile').textContent = '📄 4ku_custom.geojson';
+
+    // スプレッドシートから担当者リストを読み込み（シート1のJ列）
+    async function loadTantoList() {
+      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
+      const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
+      const tantoSet = new Set();
+      parsed.slice(1).forEach(r => {
+        const tanto = r[9]?.trim();
+        if (tanto) tantoSet.add(tanto);
+      });
+
+      const select = document.getElementById("tanto");
+      tantoSet.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name; opt.textContent = name;
+        select.appendChild(opt);
+      });
+
+      // 担当者選択時の処理
+      select.onchange = () => {
+        currentTanto = select.value;
+        toggleEditMode();
+      };
+    }
+
+    // 編集モードのON/OFF（担当者未選択時は描画ツール無効）
+    function toggleEditMode() {
+      if (drawControl) map.removeControl(drawControl);
+
+      if (currentTanto) {
+        // 担当者選択済み → 編集可能
+        drawControl = new L.Control.Draw({
+          edit: { featureGroup: drawnItems },
+          draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false }
+        });
+        map.addControl(drawControl);
+      } else {
+        // 未選択 → 編集不可
+        drawControl = null;
+      }
+    }
 
     // ファイル選択
     document.getElementById('geoFile').addEventListener('change', function(e) {
@@ -71,7 +121,7 @@
       reader.readAsText(file);
     });
 
-    // 初期ロード（ローカル固定）
+    // 初期ロード
     fetch('4ku_custom.geojson')
       .then(r => r.json())
       .then(data => {
@@ -82,34 +132,41 @@
       })
       .catch(() => {});
 
-    const drawControl = new L.Control.Draw({
-      edit: { featureGroup: drawnItems },
-      draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false }
-    });
-    map.addControl(drawControl);
-
+    // ポリゴン追加時 → 選択中の担当者を自動入力
     map.on('draw:created', e => {
+      if (!currentTanto) {
+        alert("担当者を選択してからポリゴンを追加してください");
+        return;
+      }
+
       const layer = e.layer;
-      const tanto = prompt("このポリゴンの担当者名を入力（例：日本太郎）");
-      if (!tanto) return;
-      layer.feature = {type:"Feature", properties:{CITY:"118", KEY_CODE:"NEW_"+Date.now(), tanto: tanto.trim(), status:"未完了", S_NAME:"手動追加"}};
+      layer.feature = {
+        type: "Feature",
+        properties: {
+          CITY: "118",
+          KEY_CODE: "NEW_" + Date.now(),
+          tanto: currentTanto,           // ★ 自動入力
+          status: "未完了",
+          S_NAME: "手動追加"
+        }
+      };
       drawnItems.addLayer(layer);
     });
 
     // 名前を付けて保存
     const saveBtn = document.createElement('button');
     saveBtn.innerHTML = '✅ 名前を付けて保存';
-    saveBtn.style.position='absolute'; 
-    saveBtn.style.bottom='20px'; 
-    saveBtn.style.left='20px'; 
-    saveBtn.style.zIndex=1000;
+    saveBtn.style.position = 'absolute';
+    saveBtn.style.bottom = '20px';
+    saveBtn.style.left = '20px';
+    saveBtn.style.zIndex = 1000;
     saveBtn.onclick = () => {
       let fileName = prompt("保存するファイル名を入力してください", "4ku_custom.geojson");
       if (!fileName) return;
       if (!fileName.endsWith('.geojson')) fileName += '.geojson';
 
       const data = drawnItems.toGeoJSON();
-      const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = fileName;
@@ -127,7 +184,8 @@
       location.href = "index.html";
     }
 
-    window.onload = () => {
+    window.onload = async () => {
+      await loadTantoList();   // 担当者リスト読み込み
       setTimeout(fitAll, 800);
     };
   </script>
