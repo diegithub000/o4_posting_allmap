@@ -13,7 +13,7 @@
     .modal-content{background:white;padding:30px;border-radius:12px;width:380px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
     .modal-content input{width:100%;padding:12px;margin:15px 0;font-size:16px}
     .btn-disable{opacity:0.4;pointer-events:none}
-    .debug{position:absolute;bottom:10px;left:10px;background:#000;color:#0f0;padding:8px;font-size:11px;max-width:460px;z-index:1000;white-space:pre-wrap;opacity:0.95;border-radius:4px}
+    .debug{position:absolute;bottom:10px;left:10px;background:#000;color:#0f0;padding:8px;font-size:11px;max-width:480px;z-index:1000;white-space:pre-wrap;opacity:0.95;border-radius:4px}
   </style>
 </head>
 <body>
@@ -23,7 +23,7 @@
     <div style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#455a64">👤 担当者メンテナンス</div>
     <button id="changeBtn" onclick="openChangeModal()" class="btn-disable" style="background:#455a64;color:white">担当者変更</button>
     <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 インデックスに戻る</button>
-    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.8 - 最終デバッグ版</div>
+    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.9 - 最終修正版</div>
   </div>
 
   <div id="debugPanel" class="debug"></div>
@@ -63,15 +63,17 @@
 
       parsed.slice(1).forEach((r, idx) => {
         let rawKey = r[6];
-        let keyStr = rawKey !== undefined && rawKey !== null ? rawKey.toString().trim() : "";
-        let keyNum = rawKey !== undefined && rawKey !== null ? Number(rawKey) : NaN;
+        let keyStr = rawKey != null ? rawKey.toString().trim() : "";
+        let keyNum = rawKey != null ? Number(rawKey) : NaN;
 
         if (keyStr) {
-          dataMap[keyStr] = { tanto: (r[9] || "").toString().trim(), hText: (r[7] || "").toString().trim() };
-          if (!isNaN(keyNum)) dataMap[keyNum] = dataMap[keyStr];  // 数値キーも同時登録
+          const info = { tanto: (r[9] || "").toString().trim(), hText: (r[7] || "").toString().trim() };
+          dataMap[keyStr] = info;
+          if (!isNaN(keyNum)) dataMap[keyNum] = info;   // 数値型キーも同時登録
         }
 
-        if (keyStr === "2710202000" || keyNum === 2710202000) {
+        // 網島町行を必ず監視
+        if (keyStr === "2710202000" || keyNum === 2710202000 || (r[7] && r[7].toString().includes("網島町"))) {
           debugLines.push(`網島町行(${idx+2}) rawKey=${rawKey} (型:${typeof rawKey}) → keyStr="${keyStr}"`);
         }
       });
