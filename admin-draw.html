@@ -7,20 +7,35 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-  <style>body{margin:0}#map{height:100vh}</style>
+  <style>
+    body{margin:0}#map{height:100vh}
+    .menu{
+      position:absolute;top:10px;left:10px;z-index:1000;
+      background:white;padding:12px;border-radius:8px;
+      box-shadow:0 2px 10px rgba(0,0,0,0.2);
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+      font-size:14px;
+    }
+  </style>
 </head>
 <body>
   <div id="map"></div>
 
-  <div style="position:absolute;top:10px;left:10px;z-index:1000;background:white;padding:10px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.2);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <input type="file" id="geoFile" accept=".geojson" style="display:none">
-    <button onclick="document.getElementById('geoFile').click()" style="padding:8px 12px">📂 GeoJSONを選択</button>
-    <span id="currentFile" style="font-size:13px;color:#555;min-width:220px">📄 4ku_custom.geojson</span>
-    
-    <button onclick="backToIndex()" style="padding:8px 12px;background:#555;color:white">🏠 インデックスに戻る</button>
+  <div class="menu">
+    <!-- 1. 全体表示 -->
     <button onclick="fitAll()" style="padding:8px 12px">全体表示</button>
     
-    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.000.6</div>
+    <!-- 2. インデックスに戻る -->
+    <button onclick="backToIndex()" style="padding:8px 12px;background:#555;color:white">🏠 インデックスに戻る</button>
+    
+    <!-- 3. GeoJSONを選択 -->
+    <input type="file" id="geoFile" accept=".geojson" style="display:none">
+    <button onclick="document.getElementById('geoFile').click()" style="padding:8px 12px">📂 GeoJSONを選択</button>
+    
+    <!-- 4. 現在選択ファイル表示 -->
+    <span id="currentFile" style="font-size:13px;color:#555;min-width:220px">📄 4ku_custom.geojson</span>
+    
+    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.000.7</div>
   </div>
 
   <script>
@@ -31,7 +46,7 @@
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
-    // ★ デフォルトを4ku_custom.geojsonに固定
+    // デフォルト表示ファイル名
     document.getElementById('currentFile').textContent = '📄 4ku_custom.geojson';
 
     // ファイル選択
@@ -56,7 +71,7 @@
       reader.readAsText(file);
     });
 
-    // 初期ロード（4ku_custom.geojson固定）
+    // 初期ロード（ローカル固定）
     fetch('4ku_custom.geojson')
       .then(r => r.json())
       .then(data => {
@@ -81,7 +96,7 @@
       drawnItems.addLayer(layer);
     });
 
-    // ★ 名前を付けて保存（自由に名前変更可能）
+    // 名前を付けて保存
     const saveBtn = document.createElement('button');
     saveBtn.innerHTML = '✅ 名前を付けて保存';
     saveBtn.style.position='absolute'; 
@@ -89,7 +104,7 @@
     saveBtn.style.left='20px'; 
     saveBtn.style.zIndex=1000;
     saveBtn.onclick = () => {
-      let fileName = prompt("保存するファイル名を入力してください（例：my_custom.geojson）", "4ku_custom.geojson");
+      let fileName = prompt("保存するファイル名を入力してください", "4ku_custom.geojson");
       if (!fileName) return;
       if (!fileName.endsWith('.geojson')) fileName += '.geojson';
 
