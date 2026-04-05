@@ -34,7 +34,7 @@
     </select>
 
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.7</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.001.9</div>
   </div>
 
   <script>
@@ -50,26 +50,12 @@
       const baseJson = await baseRes.json();
       baseFeatures = baseJson.features.filter(f => f.properties.CITY === "118");
 
+      // ★ ここを4ku_custom.geojsonに固定
       let customJson = {features:[]};
       try {
-        customJson = await (await fetch('custom.geojson?t=' + Date.now())).json();
+        customJson = await (await fetch('4ku_custom.geojson?t=' + Date.now())).json();
       } catch(e) {}
-
       customFeatures = customJson.features;
-
-      const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況");
-      const statusText = await statusRes.text();
-      const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
-      const statusMap = {};
-      statusRows.slice(1).forEach(r => {
-        const key = r[0]?.trim();
-        if (key) statusMap[key] = r[2]?.trim();
-      });
-
-      customFeatures.forEach(f => {
-        if (statusMap[f.properties.KEY_CODE]) f.properties.status = statusMap[f.properties.KEY_CODE];
-        else f.properties.status = "未完了";
-      });
 
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
@@ -79,13 +65,11 @@
         if (code) dataMap[code] = r[9]?.trim() || "";
       });
 
-      [...baseFeatures, ...customFeatures].forEach(f => {
-        if (!f.properties.KEY_CODE || !f.properties.KEY_CODE.startsWith("NEW_")) {
-          f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
-        }
+      baseFeatures.forEach(f => {
+        f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
       });
 
-      const tantoSet = new Set([...baseFeatures, ...customFeatures].map(f => f.properties.tanto).filter(Boolean));
+      const tantoSet = new Set(baseFeatures.map(f => f.properties.tanto).filter(Boolean));
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
         const opt = document.createElement("option");
@@ -94,14 +78,6 @@
       });
 
       filter();
-
-      map.on('zoomend', () => {
-        if (map.getZoom() >= 19 && currentTileLayer && !currentTileLayer._url.includes("openstreetmap")) {
-          if (currentTileLayer) map.removeLayer(currentTileLayer);
-          currentTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
-          currentTileLayer.addTo(map);
-        }
-      });
     }
 
     function changeMapType() {
@@ -118,50 +94,70 @@
       currentTileLayer.addTo(map);
     }
 
-    function renderMap(features) {
+    function renderMap(features, isWholeView) {
       if (layerGroup) map.removeLayer(layerGroup);
       layerGroup = L.featureGroup().addTo(map);
 
       let bounds = L.latLngBounds([]);
 
       features.forEach(f => {
-        const isCustom = f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_");
-        const isDone = f.properties.status === "完了";
-        let color = isDone ? "#0066ff" : "#ff4444";
-        let opacity = isDone ? 0.6 : 0.2;
-        let borderColor = isDone ? "#0066ff" : "#ff4444";
-        let weight = isCustom ? 3 : 2;
+        if (isWholeView) {
+          const color = f.properties.tanto ? "#2e7d32" : "#666666";
+          L.geoJSON(f, {
+            style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1}
+          }).addTo(layerGroup);
+        } else {
+          const isCustom = f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_");
+          const isDone = f.properties.status === "完了";
+          let color = isDone ? "#0066ff" : "#ff4444";
+          let opacity = isDone ? 0.6 : 0.2;
+          let borderColor = isDone ? "#0066ff" : "#ff4444";
+          let weight = isCustom ? 3 : 2;
 
-        if (currentTanto && !isCustom) {
-          color = "#ff4444";
-          opacity = 0;
-          borderColor = "#ff4444";
-          weight = 5;
+          if (!isCustom) {
+            color = "#ff4444";
+            opacity = 0;
+            borderColor = "#ff4444";
+            weight = 5;
+          }
+
+          const geoLayer = L.geoJSON(f, {
+            style: {fillColor: color, fillOpacity: opacity, color: borderColor, weight: weight}
+          }).addTo(layerGroup);
+
+          geoLayer.eachLayer(layer => {
+            layer.on('click', async function() {
+              const newStatus = f.properties.status === "完了" ? "未完了" : "完了";
+              f.properties.status = newStatus;
+              this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444", color: newStatus === "完了" ? "#0066ff" : "#ff4444"});
+
+              fetch(gasUrl, {
+                method: "POST", mode: "no-cors",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({keyCode: f.properties.KEY_CODE, tanto: f.properties.tanto, status: newStatus})
+              }).catch(() => {});
+
+              document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
+            });
+          });
         }
-
-        const geoLayer = L.geoJSON(f, {
-          style: {fillColor: color, fillOpacity: opacity, color: borderColor, weight: weight}
-        }).addTo(layerGroup);
-
-        bounds.extend(geoLayer.getBounds());
+        bounds.extend(L.geoJSON(f).getBounds());
       });
 
       if (bounds.isValid()) {
-        if (currentTanto) {
-          map.fitBounds(bounds, {padding: [60, 60]});  // 担当者選択時はしっかりフォーカス
-        } else {
-          map.fitBounds(bounds, {padding: [30, 30]});
-        }
+        map.fitBounds(bounds, {padding: isWholeView ? [30, 30] : [60, 60]});
       }
     }
 
     function filter() {
       currentTanto = document.getElementById("tanto").value;
-      let filtered = currentTanto 
-        ? customFeatures.filter(f => f.properties.tanto === currentTanto)
-        : baseFeatures;   // チェックボックス削除に伴い、担当者未選択時はbaseFeaturesを表示
 
-      renderMap(filtered);
+      if (!currentTanto) {
+        renderMap(baseFeatures, true);
+      } else {
+        const filtered = customFeatures.filter(f => f.properties.tanto === currentTanto);
+        renderMap(filtered, false);
+      }
     }
 
     function refreshLatest() {
