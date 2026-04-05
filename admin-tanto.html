@@ -23,7 +23,7 @@
     <div style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#455a64">👤 担当者メンテナンス</div>
     <button id="changeBtn" onclick="openChangeModal()" class="btn-disable" style="background:#455a64;color:white">担当者変更</button>
     <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 インデックスに戻る</button>
-    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.4 - 担当者メンテナンス</div>
+    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.5 - 担当者メンテナンス</div>
   </div>
 
   <div id="modal" class="modal">
@@ -48,15 +48,19 @@
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
+      // 1. 形状だけ取得（geojsonは表示のみ）
       const baseRes = await fetch('4ku_town.geojson');
       const baseJson = await baseRes.json();
       allFeatures = baseJson.features;
 
-      // ★ スプシ読み込みを再検査・強化（キャッシュ完全無効化）
+      // 2. スプシから最新データを強制取得（キャッシュ完全無効化）
       const csvUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1&t=" + Date.now();
-      const csvText = await (await fetch(csvUrl, { 
+      const csvText = await (await fetch(csvUrl, {
         cache: 'no-store',
-        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
       })).text();
 
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
@@ -72,6 +76,7 @@
         }
       });
 
+      // 3. スプシのデータで完全に上書き（これが正）
       allFeatures.forEach(f => {
         const info = dataMap[f.properties.KEY_CODE] || {tanto: "", hText: ""};
         f.properties.tanto = info.tanto;
@@ -86,7 +91,7 @@
       layerGroup = L.layerGroup().addTo(map);
 
       features.forEach(f => {
-        const isAssigned = !!f.properties.tanto;
+        const isAssigned = !!f.properties.tanto && f.properties.tanto !== "";
         const color = isAssigned ? "#2e7d32" : "#ff4444";
         const opacity = isAssigned ? 0.5 : 0.4;
 
@@ -112,6 +117,7 @@
       });
     }
 
+    // 以降の関数は変更なし（openChangeModal, cancelModal, updateTanto, backToIndex）
     function openChangeModal() {
       if (!selectedFeature) return;
       const props = selectedFeature.feature.properties;
@@ -141,11 +147,7 @@
 
       alert("✅ 更新を送信しました。ページを再読み込みします。");
       document.getElementById("modal").style.display = "none";
-
-      // 担当者変更後は必ずスプシから最新データを再ロード
-      setTimeout(() => {
-        location.reload(true);
-      }, 600);
+      setTimeout(() => { location.reload(true); }, 600);
     }
 
     function backToIndex() {
