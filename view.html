@@ -42,7 +42,7 @@
       <option value="pale">淡色地図</option>
     </select>
 
-    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.002.1</div>
+    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.002.2</div>
   </div>
 
   <script>
@@ -52,9 +52,10 @@
       map = L.map('map').setView([34.69, 135.54], 14);
       changeMapType();
 
+      // ★ 4ku_town.geojsonから全区を表示（城東・都島・北区・福島区すべて）
       const baseRes = await fetch('4ku_town.geojson');
       const baseJson = await baseRes.json();
-      allFeatures = baseJson.features.filter(f => f.properties.CITY === "118");
+      allFeatures = baseJson.features;   // CITYフィルタを削除して全区表示
 
       const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
@@ -123,7 +124,7 @@
           direction: "top",
           className: "custom-tooltip",
           offset: [0, -10],
-          html: true   // ← これが重要！
+          html: true
         });
       });
     }
