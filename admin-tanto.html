@@ -13,7 +13,7 @@
     .modal-content{background:white;padding:30px;border-radius:12px;width:380px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
     .modal-content input{width:100%;padding:12px;margin:15px 0;font-size:16px}
     .btn-disable{opacity:0.4;pointer-events:none}
-    .debug{position:absolute;bottom:10px;left:10px;background:#000;color:#0f0;padding:8px;font-size:11px;max-width:400px;z-index:1000;white-space:pre-wrap;opacity:0.9;border-radius:4px}
+    .debug{position:absolute;bottom:10px;left:10px;background:#000;color:#0f0;padding:8px;font-size:11px;max-width:420px;z-index:1000;white-space:pre-wrap;opacity:0.95;border-radius:4px}
   </style>
 </head>
 <body>
@@ -23,10 +23,9 @@
     <div style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#455a64">👤 担当者メンテナンス</div>
     <button id="changeBtn" onclick="openChangeModal()" class="btn-disable" style="background:#455a64;color:white">担当者変更</button>
     <button onclick="backToIndex()" style="margin-left:8px;background:#555;color:white">🏠 インデックスに戻る</button>
-    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.6 - 安全修正版</div>
+    <div style="font-size:10px;color:#999;margin-top:10px;text-align:center">Build 0.001.7 - デバッグ強化版</div>
   </div>
 
-  <!-- デバッグ情報（画面下に最小限表示） -->
   <div id="debugPanel" class="debug"></div>
 
   <div id="modal" class="modal">
@@ -55,28 +54,37 @@
       const baseJson = await baseRes.json();
       allFeatures = baseJson.features;
 
-      // スプシ取得（最小限のキャッシュ対策のみ）
       const csvUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1&t=" + Date.now();
       const csvText = await (await fetch(csvUrl)).text();
 
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
 
-      parsed.slice(1).forEach(r => {
-        const key = r[6]?.toString().trim();
+      // デバッグ用配列
+      const debugLines = [`dataMap登録件数: ${parsed.length - 1}行`];
+
+      parsed.slice(1).forEach((r, idx) => {
+        let rawKey = r[6];
+        let key = rawKey !== undefined && rawKey !== null ? rawKey.toString().trim() : "";
+
         if (key) {
           dataMap[key] = {
             tanto: (r[9] || "").toString().trim(),
             hText: (r[7] || "").toString().trim()
           };
         }
+
+        // 網島町だけ特別に監視
+        if (key === "2710202000" || rawKey === 2710202000) {
+          debugLines.push(`網島町行(${idx+2}) rawKey=${rawKey} → key="${key}"`);
+        }
       });
 
-      // デバッグ情報
-      const debug = [];
-      debug.push(`dataMap登録件数: ${Object.keys(dataMap).length}`);
-      debug.push(`網島町(2710202000): ${dataMap["2710202000"] ? dataMap["2710202000"].tanto : "未登録"}`);
-      document.getElementById("debugPanel").textContent = debug.join(" | ");
+      debugLines.push(`最終 dataMap件数: ${Object.keys(dataMap).length}`);
+      debugLines.push(`網島町(2710202000) 最終状態: ${dataMap["2710202000"] ? dataMap["2710202000"].tanto : "未登録"}`);
+
+      // デバッグ表示
+      document.getElementById("debugPanel").textContent = debugLines.join("\n");
 
       allFeatures.forEach(f => {
         const key = f.properties.KEY_CODE.toString().trim();
