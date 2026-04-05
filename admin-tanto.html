@@ -48,12 +48,12 @@
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
       L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {maxZoom:19, opacity:0.3}).addTo(map);
 
-      // 1. 形状だけ取得（geojsonは表示のみ）
+      // 形状だけ取得
       const baseRes = await fetch('4ku_town.geojson');
       const baseJson = await baseRes.json();
       allFeatures = baseJson.features;
 
-      // 2. スプシから最新データを強制取得（キャッシュ完全無効化）
+      // ★ スプシを最優先で強制取得（キャッシュ完全排除）
       const csvUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1&t=" + Date.now();
       const csvText = await (await fetch(csvUrl, {
         cache: 'no-store',
@@ -67,18 +67,21 @@
       const dataMap = {};
 
       parsed.slice(1).forEach(r => {
-        const key = r[6]?.toString().trim();
-        if (key) {
+        // KEY_CODEをより強固に正規化（数値型・文字列型の両方に対応）
+        let key = r[6];
+        if (key !== undefined && key !== null) {
+          key = key.toString().trim();
           dataMap[key] = {
-            tanto: r[9]?.trim() || "",
-            hText: r[7]?.trim() || ""
+            tanto: (r[9] || "").toString().trim(),
+            hText: (r[7] || "").toString().trim()
           };
         }
       });
 
-      // 3. スプシのデータで完全に上書き（これが正）
+      // スプシのデータで完全に上書き（これが正義）
       allFeatures.forEach(f => {
-        const info = dataMap[f.properties.KEY_CODE] || {tanto: "", hText: ""};
+        const key = f.properties.KEY_CODE.toString().trim();
+        const info = dataMap[key] || {tanto: "", hText: ""};
         f.properties.tanto = info.tanto;
         f.properties.hText = info.hText;
       });
@@ -117,7 +120,6 @@
       });
     }
 
-    // 以降の関数は変更なし（openChangeModal, cancelModal, updateTanto, backToIndex）
     function openChangeModal() {
       if (!selectedFeature) return;
       const props = selectedFeature.feature.properties;
