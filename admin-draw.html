@@ -36,12 +36,12 @@
     <!-- 4. 現在選択ファイル表示 -->
     <span id="currentFile" style="font-size:13px;color:#555;min-width:220px">📄 4ku_custom.geojson</span>
 
-    <!-- 新規追加：担当者プルダウン -->
+    <!-- 担当者プルダウン -->
     <select id="tanto" onchange="filterByTanto()" style="padding:8px 12px">
       <option value="">担当者を選択（必須）</option>
     </select>
 
-    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.000.8</div>
+    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.000.9</div>
   </div>
 
   <script>
@@ -52,7 +52,10 @@
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
-    let currentTanto = "";   // 現在選択中の担当者
+    let currentTanto = "";   
+    let baseFeatures = [];           // 標準地区（4ku_town.geojson）
+    let highlightLayerGroup;         // 青線ハイライト専用レイヤー
+
     const drawControl = new L.Control.Draw({
       edit: { featureGroup: drawnItems },
       draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false }
@@ -61,6 +64,9 @@
 
     // デフォルト表示ファイル名
     document.getElementById('currentFile').textContent = '📄 4ku_custom.geojson';
+
+    // ハイライト用レイヤー初期化
+    highlightLayerGroup = L.layerGroup().addTo(map);
 
     // ファイル選択
     document.getElementById('geoFile').addEventListener('change', function(e) {
@@ -113,16 +119,69 @@
       });
     }
 
-    // 担当者選択時フィルタ＆編集制御
+    // ★ 新規追加：標準地区（4ku_town.geojson）を読み込み、自動マッチングで担当者情報を付与
+    async function loadBaseFeatures() {
+      const baseRes = await fetch('4ku_town.geojson');
+      const baseJson = await baseRes.json();
+      baseFeatures = baseJson.features;
+
+      const csvUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1&t=" + Date.now();
+      const csvText = await (await fetch(csvUrl)).text();
+
+      const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
+      const dataMap = {};
+
+      parsed.slice(1).forEach(r => {
+        const key = r[6]?.toString().trim();
+        if (key) {
+          dataMap[key] = {
+            tanto: (r[9] || "").toString().trim(),
+            hText: (r[7] || "").toString().trim()
+          };
+        }
+      });
+
+      // admin-tanto.html と同じ自動マッチング
+      baseFeatures.forEach(f => {
+        const props = f.properties;
+        let matchedInfo = {tanto: "", hText: ""};
+
+        const candidates = [
+          props.KEY_CODE?.toString().trim(),
+          props.KEYCODE1 ? "27" + props.KEYCODE1.toString().trim() : null,
+          props.KEYCODE1 ? props.KEYCODE1.toString().trim() : null,
+          (props.PREF && props.CITY && props.KIHON1 && props.KIHON2) 
+            ? props.PREF.toString().trim() + props.CITY.toString().trim() + props.KIHON1.toString().trim().slice(-3) + props.KIHON2.toString().trim()
+            : null
+        ];
+
+        for (const cand of candidates) {
+          if (cand && dataMap[cand]) {
+            matchedInfo = dataMap[cand];
+            break;
+          }
+        }
+
+        f.properties.tanto = matchedInfo.tanto;
+        f.properties.hText = matchedInfo.hText;
+      });
+    }
+
+    // 担当者選択時フィルタ＆青線ハイライト
     function filterByTanto() {
-      currentTanto = document.getElementById("tanto").value;
+      const newTanto = document.getElementById("tanto").value;
+
+      // ハイライトを一旦クリア（担当者変更時・全体表示時もクリア）
+      highlightLayerGroup.clearLayers();
+
+      currentTanto = newTanto;
 
       // 未選択なら編集不可
       if (!currentTanto) {
         drawControl.setDrawingOptions({polygon: false, rectangle: false});
         map.removeControl(drawControl);
-        map.addControl(drawControl); // 再追加で無効化反映
-        drawnItems.eachLayer(layer => layer.setStyle({opacity: 0.3})); // 薄くして視認性低下
+        map.addControl(drawControl);
+        drawnItems.eachLayer(layer => layer.setStyle({opacity: 0.3}));
         return;
       }
 
@@ -131,7 +190,7 @@
       map.removeControl(drawControl);
       map.addControl(drawControl);
 
-      // 選択担当者のポリゴンのみ表示（他の担当者は薄く）
+      // 既存の手動ポリゴン（drawnItems）の表示制御はそのまま維持
       drawnItems.eachLayer(layer => {
         const tanto = layer.feature?.properties?.tanto || "";
         if (tanto === currentTanto) {
@@ -140,12 +199,29 @@
           layer.setStyle({opacity: 0.2, fillOpacity: 0.1});
         }
       });
+
+      // ★ 新機能：該当担当者の標準地区を青線で囲む（塗りつぶしなし・クリック反応なし）
+      const targetFeatures = baseFeatures.filter(f => (f.properties.tanto || "").trim() === currentTanto);
+
+      if (targetFeatures.length > 0) {
+        const geoLayer = L.geoJSON(targetFeatures, {
+          style: {
+            color: "#1976d2",      // 青の線
+            weight: 4,
+            fillOpacity: 0,        // 塗りつぶしなし
+            fillColor: "transparent"
+          },
+          interactive: false       // クリック反応なし
+        }).addTo(highlightLayerGroup);
+
+        // 該当地区全体に自動フォーカス
+        map.fitBounds(geoLayer.getBounds(), {padding: [50, 50]});
+      }
     }
 
     map.on('draw:created', e => {
       const layer = e.layer;
 
-      // ★ 選択中の担当者を自動設定（prompt削除）
       if (!currentTanto) {
         alert("担当者を選択してからポリゴンを追加してください");
         drawnItems.removeLayer(layer);
@@ -157,7 +233,7 @@
         properties: {
           CITY: "118",
           KEY_CODE: "NEW_" + Date.now(),
-          tanto: currentTanto,          // 自動入力
+          tanto: currentTanto,
           status: "未完了",
           S_NAME: "手動追加"
         }
@@ -197,7 +273,8 @@
     }
 
     window.onload = async () => {
-      await loadTantoList();   // 担当者リスト読み込み
+      await loadTantoList();     // 担当者リスト読み込み
+      await loadBaseFeatures();  // 標準地区読み込み（自動マッチング付き）
       setTimeout(fitAll, 800);
     };
   </script>
