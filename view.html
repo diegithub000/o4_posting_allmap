@@ -42,7 +42,7 @@
       <option value="pale">淡色地図</option>
     </select>
 
-    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.002.2</div>
+    <div style="font-size:10px;color:#999;margin-left:10px">Build 0.002.3</div>
   </div>
 
   <script>
@@ -52,35 +52,59 @@
       map = L.map('map').setView([34.69, 135.54], 14);
       changeMapType();
 
-      // ★ 4ku_town.geojsonから全区を表示（城東・都島・北区・福島区すべて）
+      // ★ 4ku_town.geojsonから全区を表示
       const baseRes = await fetch('4ku_town.geojson');
       const baseJson = await baseRes.json();
-      allFeatures = baseJson.features;   // CITYフィルタを削除して全区表示
+      allFeatures = baseJson.features;
 
-      const csvText = await (await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1")).text();
+      const csvUrl = "https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=シート1&t=" + Date.now();
+      const csvText = await (await fetch(csvUrl)).text();
+
       const parsed = Papa.parse(csvText, {header:false, skipEmptyLines:true}).data;
       const dataMap = {};
+
       parsed.slice(1).forEach(r => {
-        const code = r[6]?.trim();
-        if (code) {
-          dataMap[code] = {
-            tanto: r[9]?.trim() || "",
-            hText: r[7]?.trim() || ""
+        const key = r[6]?.toString().trim();
+        if (key) {
+          dataMap[key] = {
+            tanto: (r[9] || "").toString().trim(),
+            hText: (r[7] || "").toString().trim()
           };
         }
       });
 
+      // === admin-tanto.html と同一の自動マッチング（複数の候補で照合）===
       allFeatures.forEach(f => {
-        const info = dataMap[f.properties.KEY_CODE] || {tanto: "", hText: ""};
-        f.properties.tanto = info.tanto;
-        f.properties.hText = info.hText;
+        const props = f.properties;
+        let matchedInfo = {tanto: "", hText: ""};
+
+        const candidates = [
+          props.KEY_CODE?.toString().trim(),
+          props.KEYCODE1 ? "27" + props.KEYCODE1.toString().trim() : null,
+          props.KEYCODE1 ? props.KEYCODE1.toString().trim() : null,
+          (props.PREF && props.CITY && props.KIHON1 && props.KIHON2) 
+            ? props.PREF.toString().trim() + props.CITY.toString().trim() + props.KIHON1.toString().trim().slice(-3) + props.KIHON2.toString().trim()
+            : null
+        ];
+
+        for (const cand of candidates) {
+          if (cand && dataMap[cand]) {
+            matchedInfo = dataMap[cand];
+            break;
+          }
+        }
+
+        f.properties.tanto = matchedInfo.tanto;
+        f.properties.hText = matchedInfo.hText;
       });
 
+      // 担当者セレクトボックス作成
       const tantoSet = new Set(allFeatures.map(f => f.properties.tanto).filter(Boolean));
       const select = document.getElementById("tanto");
       tantoSet.forEach(name => {
         const opt = document.createElement("option");
-        opt.value = name; opt.textContent = name;
+        opt.value = name; 
+        opt.textContent = name;
         select.appendChild(opt);
       });
 
@@ -106,25 +130,34 @@
       layerGroup = L.layerGroup().addTo(map);
 
       features.forEach(f => {
-        const isAssigned = !!f.properties.tanto;
-        const color = isAssigned ? "#2e7d32" : "#ff4444";
-        const opacity = isAssigned ? 0.5 : 0.4;
+        const tanto = (f.properties.tanto || "").trim();
+        const isAssigned = tanto !== "";
+
+        // 「投函不可」専用の色設定（グレー・濃度0.5）
+        let color = "#ff4444";
+        let opacity = 0.4;
+        if (tanto === "投函不可") {
+          color = "#9e9e9e";
+          opacity = 0.5;
+        } else if (isAssigned) {
+          color = "#2e7d32";
+          opacity = 0.5;
+        }
 
         const geoLayer = L.geoJSON(f, {
           style: {fillColor: color, fillOpacity: opacity, color: "#333", weight: 1}
         }).addTo(layerGroup);
 
-        // 2行表示（<br>で強制改行）
+        const displayName = f.properties.hText || f.properties.S_NAME || "地区名未設定";
         let tooltipText = isAssigned 
-          ? `${f.properties.tanto}<br>${f.properties.hText}` 
-          : `[担当者なし]<br>${f.properties.hText}`;
+          ? `${f.properties.tanto}<br>${displayName}` 
+          : `[担当者なし]<br>${displayName}`;
 
         geoLayer.bindTooltip(tooltipText, {
           permanent: false,
           direction: "top",
           className: "custom-tooltip",
-          offset: [0, -10],
-          html: true
+          offset: [0, -10]
         });
       });
     }
