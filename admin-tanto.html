@@ -30,7 +30,7 @@
     <div class="modal-content">
       <h3>担当者を変更します</h3>
       <p id="districtName" style="font-weight:bold;color:#d32f2f;margin:10px 0;"></p>
-      <p style="font-size:14px;color:#555;margin-bottom:8px;">姓名の間に空白を作らないでください<br>削除する場合は空欄にしてください</p>
+      <p style="font-size:14px;color:#555;margin-bottom:8px;">姓名の間に空白を作らないでください<br>削除する場合は空欄にしてください<br>投函不可エリアを設定する場合は「投函不可」と記入してください</p>
       <input id="newTantoInput" type="text" placeholder="新しい担当者名">
       <div style="margin-top:20px">
         <button onclick="cancelModal()" style="margin-right:10px;padding:10px 20px;background:#999;color:white;border:none;border-radius:6px;">キャンセル</button>
@@ -102,9 +102,19 @@
       layerGroup = L.layerGroup().addTo(map);
 
       features.forEach(f => {
-        const isAssigned = !!f.properties.tanto && f.properties.tanto !== "";
-        const color = isAssigned ? "#2e7d32" : "#ff4444";
-        const opacity = isAssigned ? 0.5 : 0.4;
+        const tanto = (f.properties.tanto || "").trim();
+        const isAssigned = tanto !== "";
+
+        // 「投函不可」専用の色設定（グレー・濃度0.5）
+        let color = "#ff4444";
+        let opacity = 0.4;
+        if (tanto === "投函不可") {
+          color = "#9e9e9e";   // グレー
+          opacity = 0.5;
+        } else if (isAssigned) {
+          color = "#2e7d32";   // 通常の担当者あり（緑）
+          opacity = 0.5;
+        }
 
         const geoLayer = L.geoJSON(f, {
           style: {fillColor: color, fillOpacity: opacity, color: "#333", weight: 1}
