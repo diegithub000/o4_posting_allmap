@@ -33,7 +33,7 @@
     </select>
 
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.002.1</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.002.2</div>
   </div>
 
   <script>
@@ -64,11 +64,17 @@
         if (code) dataMap[code] = r[9]?.trim() || "";
       });
 
+      // baseFeaturesにtantoをセット（従来通り）
       baseFeatures.forEach(f => {
         f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
       });
 
-      // ★ バグ修正：ポスティング状況シートからステータスを読み込み（kawachinagano.htmlと完全同一ロジック）
+      // ★ 修正：customFeaturesにも同じ方法でtantoをセット（これで担当者フィルタが機能する）
+      customFeatures.forEach(f => {
+        f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
+      });
+
+      // ポスティング状況シートからステータスを読み込み（前回修正を維持）
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
@@ -78,7 +84,6 @@
         if (key) statusMap[key] = r[2]?.trim();
       });
 
-      // customFeaturesにステータスを反映（これで「完了」が青色になる）
       customFeatures.forEach(f => {
         if (statusMap[f.properties.KEY_CODE]) {
           f.properties.status = statusMap[f.properties.KEY_CODE];
@@ -120,4 +125,82 @@
         if (isWholeView) {
           const color = f.properties.tanto ? "#2e7d32" : "#666666";
           L.geoJSON(f, {
-            style
+            style: {fillColor: color, fillOpacity: 0.25, color: "#333", weight: 1}
+          }).addTo(layerGroup);
+        } else {
+          const isCustom = f.properties.KEY_CODE && f.properties.KEY_CODE.startsWith("NEW_");
+          const isDone = f.properties.status === "完了";
+          let color = isDone ? "#0066ff" : "#ff4444";
+          let opacity = isDone ? 0.6 : 0.2;
+          let borderColor = isDone ? "#0066ff" : "#ff4444";
+          let weight = isCustom ? 3 : 2;
+
+          if (!isCustom) {
+            color = "#ff4444";
+            opacity = 0;
+            borderColor = "#ff4444";
+            weight = 5;
+          }
+
+          const geoLayer = L.geoJSON(f, {
+            style: {fillColor: color, fillOpacity: opacity, color: borderColor, weight: weight}
+          }).addTo(layerGroup);
+
+          geoLayer.eachLayer(layer => {
+            layer.on('click', async function() {
+              const newStatus = f.properties.status === "完了" ? "未完了" : "完了";
+              f.properties.status = newStatus;
+              this.setStyle({fillColor: newStatus === "完了" ? "#0066ff" : "#ff4444", color: newStatus === "完了" ? "#0066ff" : "#ff4444"});
+
+              fetch(gasUrl, {
+                method: "POST", mode: "no-cors",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({keyCode: f.properties.KEY_CODE, tanto: f.properties.tanto, status: newStatus})
+              }).catch(() => {});
+
+              document.getElementById("status").innerHTML = `✅ ${f.properties.S_NAME || "ポリゴン"} を ${newStatus}`;
+            });
+          });
+        }
+        bounds.extend(L.geoJSON(f).getBounds());
+      });
+
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, {padding: isWholeView ? [30, 30] : [60, 60]});
+      }
+    }
+
+    function filter() {
+      currentTanto = document.getElementById("tanto").value;
+
+      if (!currentTanto) {
+        renderMap(baseFeatures, true);
+      } else {
+        const filtered = customFeatures.filter(f => f.properties.tanto === currentTanto);
+        renderMap(filtered, false);
+      }
+    }
+
+    function refreshLatest() {
+      location.reload(true);
+    }
+
+    function getMyLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          if (locationMarker) map.removeLayer(locationMarker);
+          locationMarker = L.marker([pos.coords.latitude, pos.coords.longitude])
+            .addTo(map).bindPopup("📍 現在地").openPopup();
+          map.flyTo([pos.coords.latitude, pos.coords.longitude], 18);
+        });
+      }
+    }
+
+    function backToIndex() {
+      location.href = "index.html";
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
