@@ -33,7 +33,7 @@
     </select>
 
     <div id="status" style="margin-top:8px;font-size:14px;color:#0066ff"></div>
-    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.002.2</div>
+    <div style="font-size:10px;color:#999;margin-top:6px;text-align:center">Build 0.002.3</div>
   </div>
 
   <script>
@@ -43,7 +43,7 @@
 
     async function init() {
       map = L.map('map').setView([34.69, 135.54], 14);
-      changeMapType();   // デフォルトでOSMを表示
+      changeMapType();
 
       const baseRes = await fetch('4ku_town.geojson');
       const baseJson = await baseRes.json();
@@ -64,17 +64,18 @@
         if (code) dataMap[code] = r[9]?.trim() || "";
       });
 
-      // baseFeaturesにtantoをセット（従来通り）
       baseFeatures.forEach(f => {
         f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
       });
 
-      // ★ 修正：customFeaturesにも同じ方法でtantoをセット（これで担当者フィルタが機能する）
+      // ★ 修正：customFeaturesは「tantoがまだ入っていない場合のみ」セット（上書き禁止）
       customFeatures.forEach(f => {
-        f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
+        if (!f.properties.tanto || f.properties.tanto === "") {
+          f.properties.tanto = dataMap[f.properties.KEY_CODE] || "";
+        }
       });
 
-      // ポスティング状況シートからステータスを読み込み（前回修正を維持）
+      // ポスティング状況シートからステータス読み込み
       const statusRes = await fetch("https://docs.google.com/spreadsheets/d/15P4TYqvt41ACsdhLYkC2-vzN3Do3E-S6OgqNDiCM_ZM/gviz/tq?tqx=out:csv&sheet=ポスティング状況&gid=1195750240");
       const statusText = await statusRes.text();
       const statusRows = Papa.parse(statusText, {header:false, skipEmptyLines:true}).data;
